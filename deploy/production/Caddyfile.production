@@ -1,0 +1,37 @@
+{
+    email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+    encode gzip zstd
+
+    header {
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=()"
+    }
+
+    handle /api/stream {
+        reverse_proxy backend:8000 {
+            flush_interval -1
+        }
+    }
+
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    handle_path /files/* {
+        rewrite * /{$S3_BUCKET}{uri}
+        reverse_proxy minio:9000
+    }
+
+    handle {
+        reverse_proxy frontend:8080
+    }
+}
+
+{$MINIO_CONSOLE_DOMAIN} {
+    reverse_proxy minio:9001
+}

@@ -1,0 +1,121 @@
+/* Hiding native spin-buttons */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type=number] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ── Work Dashboard layout ───────────────────────────────────────────────── */
+#wdash { display: none; min-height: 100vh; flex-direction: column; }
+
+@keyframes pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
+}
+.loading-pulse {
+  animation: pulse 1.5s infinite ease-in-out;
+}
+
+.wd-content { padding: 16px 24px 32px; flex: 1; }
+
+/* ── Epics grid ───────────────────────────────────────────────────────────── */
+.wd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+/* ── State messages ───────────────────────────────────────────────────────── */
+.wd-state-msg {
+  grid-column: 1 / -1;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--muted);
+  letter-spacing: .08em;
+  padding: 48px 0;
+  text-align: center;
+}
+
+/* ── Toolbar ─────────────────────────────────────────────────────────────── */
+.wd-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+.wd-main-tabs { display: flex; gap: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+.wd-main-tab { background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--muted); cursor: pointer; padding: 8px 16px; border-radius: 8px; transition: all 0.2s; letter-spacing: 0.05em; text-transform: uppercase; }
+.wd-main-tab:hover { color: var(--fg2); background: var(--surface2); }
+.wd-main-tab.active { color: var(--blue); background: rgba(96,165,250,0.1); font-weight: 500; }
+
+.wd-toolbar-row {
+  display: flex; flex-direction: row; align-items: center; gap: 16px; width: 100%; flex-wrap: wrap;
+}
+.toolbar-search-group { flex: 1; display: flex; }
+
+.toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wd-input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: 'Inter', sans-serif;
+  font-size: 14px;
+  padding: 10px 16px;
+  outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.wd-input:focus { border-color: var(--blue); box-shadow: 0 0 0 2px rgba(96,165,250,0.1); }
+
+.toolbar-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.chip-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all .2s;
+  white-space: nowrap;
+}
+.chip-btn:hover { border-color: var(--border-h); color: var(--text); }
+.chip-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+[data-theme="light"] .chip-btn.active { color: #fff; }
+
+.filter-sep-v {
+  width: 1px;
+  height: 16px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* ── Responsive ───────────────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .wd-content { padding: 10px 12px 24px; }
+  .wd-grid { grid-template-columns: 1fr; }
+  .dp-stats { grid-template-columns: repeat(2, 1fr); }
+  #detailPanel { width: 100vw; }
+  .topbar-sep, .topbar-loc { display: none; }
+}

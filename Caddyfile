@@ -1,0 +1,85 @@
+# Standalone Configuration for Resonance
+
+# --- Resonance Domain ---
+# Change this to your actual server domain
+resonance.tatarinovi.ru {
+    log {
+        output stdout
+    }
+
+    # API Backend (regular requests)
+    handle /api/stream {
+        # SSE: disable buffering and chunking, keep the connection open
+        reverse_proxy app:8000 {
+            transport http {
+                read_buffer 4KB
+                write_buffer 4KB
+                response_header_timeout 24h
+                read_timeout 24h
+                write_timeout 24h
+            }
+            flush_interval -1
+            header_up Connection ""
+            header_up X-Accel-Buffering "no"
+        }
+    }
+    handle /api/* {
+        reverse_proxy app:8000
+    }
+
+    # MinIO File Attachments
+    handle_path /files* {
+        rewrite * /attachments{uri}
+        reverse_proxy minio:9000
+    }
+
+    # Vite build assets and root static files (must bypass SPA rewrite)
+    @resonanceStatic path /assets/* /favicon.ico /robots.txt
+    handle @resonanceStatic {
+        reverse_proxy frontend:80
+    }
+
+    # SPA: все прочие пути → index.html (React Router)
+    handle {
+        rewrite * /index.html
+        reverse_proxy frontend:80
+    }
+}
+
+# --- MinIO Administration Console ---
+# Change this to your MinIO console domain
+minio.tatarinovi.ru {
+    reverse_proxy minio:9001
+}
+
+# --- Tatarinovi Main Site / Vizitka ---
+tatarinovi.ru {
+    encode gzip zstd
+
+    log {
+        output stdout
+    }
+
+    header {
+        X-Frame-Options "SAMEORIGIN"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
+    handle {
+        reverse_proxy vizitka:80 {
+            header_up Host {host}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-For {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+}
+
+ai.tatarinovi.ru {
+    log {
+        output stdout
+    }
+
+    reverse_proxy host.docker.internal:3000
+}

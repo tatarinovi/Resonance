@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>katamy // work-dashboard</title>
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📋</text></svg>">
+  <link rel="stylesheet" href="/dashboard/fonts.css">
+  <link rel="stylesheet" href="/dashboard/css/base.css">
+  <link rel="stylesheet" href="/dashboard/css/base_layout.css">
+  <link rel="stylesheet" href="/dashboard/css/layout.css?v=4">
+  <link rel="stylesheet" href="/dashboard/css/components.css?v=4">
+  <link rel="stylesheet" href="/dashboard/css/modals.css?v=4">
+  <link rel="stylesheet" href="/dashboard/css/detail.css?v=4">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+  <!-- LOGIN -->
+  <div id="loginScreen">
+    <form class="login-wrap" id="loginForm">
+      <div class="login-eyebrow">tatarinovi.ru · kanban access</div>
+      <div class="login-heading">Work<br><em>Dashboard.</em></div>
+      <div class="field">
+        <label class="field-label">Email</label>
+        <input class="field-input" type="email" id="emailInput" placeholder="you@example.com" autocomplete="email" />
+      </div>
+      <div class="field">
+        <label class="field-label">Password</label>
+        <input class="field-input" type="password" id="passInput" placeholder="Enter password"
+          autocomplete="current-password" />
+      </div>
+      <button class="login-btn" type="submit" id="loginBtn">Continue</button>
+      <div class="login-err" id="loginErr"></div>
+    </form>
+  </div>
+
+  <!-- WORK DASHBOARD -->
+  <div id="wdash">
+    <div class="topbar">
+      <div class="topbar-left">
+        <span class="topbar-logo">Igor</span>
+        <span class="topbar-sep">/</span>
+        <span class="topbar-loc">work-dashboard</span>
+      </div>
+      <div class="topbar-center" style="position: absolute; left: 50%; transform: translateX(-50%);">
+        <button class="tb-btn"
+          style="background:var(--blue); color:#fff; border-color:var(--blue); padding: 5px 16px; font-weight: 500;"
+          onclick="openCreateTask()">+ New Task</button>
+      </div>
+      <div class="topbar-right">
+        <button class="tb-btn" id="clearCacheBtn" onclick="clearCache()" title="Clear cache">↺</button>
+        <button class="tb-btn" id="loadAllBtn" onclick="loadAllEpicsData()" title="Load data for all epics">📥</button>
+        <button class="tb-btn" onclick="toggleWorkload()" title="Team Workload">👥</button>
+        <button class="tb-btn" onclick="toggleSettings()" title="Settings">⚙️</button>
+        <button class="tb-btn" id="themeBtn" onclick="cycleTheme()">☾</button>
+        <a class="tb-btn" href="https://katamy.su/dashboard">personal</a>
+        <button class="tb-btn" onclick="doLogout()">exit</button>
+      </div>
+    </div>
+    <div class="wd-content">
+      <div class="wd-toolbar">
+        <div class="wd-main-tabs">
+          <button class="wd-main-tab active" id="tabEpicsBtn" onclick="switchMainTab('epics')">Epics</button>
+          <button class="wd-main-tab" id="tabTasksBtn" onclick="switchMainTab('tasks')">Tasks</button>
+        </div>
+        <div class="wd-toolbar-row">
+          <div class="toolbar-search-group" style="flex: 0 0 min(240px, 100%); margin-right: 16px;">
+            <input type="text" id="epicSearchInput" class="wd-input" placeholder="search..."
+              oninput="onMainSearch(this.value)">
+          </div>
+          <div class="toolbar-filter-group" id="tasksExtraFilters" style="display:none; margin-left:12px;">
+            <button class="chip-btn" id="onlyMineFilterBtn" onclick="toggleOnlyMine()">Только мои</button>
+          </div>
+          <div class="filter-sep-v" id="tasksExtraSep"
+            style="display:none; margin: 0 4px; border-left: 2px solid var(--border); opacity: 0.5;"></div>
+          <div class="toolbar-filter-group" id="projectFilters" style="flex:1;">
+            <!-- Project chip buttons will be rendered here -->
+          </div>
+        </div>
+      </div>
+
+      <div class="wd-grid" id="epicsGrid">
+        <div class="wd-state-msg">Loading…</div>
+      </div>
+      <div class="wd-grid" id="tasksGrid" style="display: none;">
+        <div class="wd-state-msg">Select "Tasks" tab to load open tasks...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DETAIL OVERLAY + PANEL -->
+  <div id="detailOverlay" onclick="closeDetail()"></div>
+  <div id="detailPanel">
+    <div id="detailContent"></div>
+  </div>
+
+  <!-- SETTINGS MODAL -->
+  <div id="settingsOverlay" onclick="toggleSettings()"></div>
+  <div id="settingsPanel">
+    <div id="settingsContent"></div>
+  </div>
+
+  <!-- TASK DETAIL MODAL -->
+  <div id="taskDetailOverlay" onclick="closeTaskDetail()"></div>
+  <div id="taskDetailPanel">
+    <div id="taskDetailContent"></div>
+  </div>
+
+  <!-- CREATE TASK MODAL -->
+  <div id="createTaskOverlay" onclick="closeCreateTask()"></div>
+  <div id="createTaskPanel">
+    <div id="createTaskContent"></div>
+  </div>
+
+  <!-- TEAM WORKLOAD MODAL -->
+  <div id="workloadOverlay" onclick="toggleWorkload()"></div>
+  <div id="workloadPanel">
+    <div id="workloadContent"></div>
+  </div>
+
+  <script src="/dashboard/js/state.js?v=2"></script>
+  <script src="/dashboard/js/api.js?v=3"></script>
+  <script src="/dashboard/js/cache.js?v=2"></script>
+  <script src="/dashboard/js/auth.js?v=2"></script>
+  <script src="/dashboard/js/ui.js?v=2"></script>
+  <script src="/dashboard/js/ui_detail.js?v=2"></script>
+  <script src="/dashboard/js/ui_detail2.js?v=2"></script>
+  <script src="/dashboard/js/app.js?v=2"></script>
+</body>
+
+</html>

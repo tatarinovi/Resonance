@@ -1,0 +1,145 @@
+name: Release Docker Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Immutable image tag, for example v1.2.3-a1b2c3d4
+        required: true
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  actions: read
+  contents: read
+  packages: write
+  id-token: write
+  security-events: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}/resonance
+  TRIVY_VERSION: 0.69.3
+
+jobs:
+  build-scan-sign:
+    name: Build, scan, sign
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: backend
+            dockerfile: deploy/docker/backend.Dockerfile
+          - name: frontend
+            dockerfile: deploy/docker/frontend.Dockerfile
+          - name: gateway
+            dockerfile: deploy/docker/gateway.Dockerfile
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version
+        id: version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Resolve image prefix
+        id: image
+        run: |
+          namespace="$(echo "${IMAGE_NAMESPACE}" | tr '[:upper:]' '[:lower:]')"
+          echo "prefix=${REGISTRY}/${namespace}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          provenance: true
+          sbom: true
+          tags: ${{ steps.image.outputs.prefix }}/${{ matrix.name }}:${{ steps.version.outputs.value }}
+
+      - name: Install Trivy CLI
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
+            -o trivy.tar.gz
+          tar -xzf trivy.tar.gz trivy
+          sudo install -m 0755 trivy /usr/local/bin/trivy
+          trivy --version
+
+      - name: Generate Trivy SARIF
+        run: |
+          set -euo pipefail
+          trivy image \
+            --skip-version-check \
+            --scanners vuln \
+            --format sarif \
+            --output "trivy-${{ matrix.name }}.sarif" \
+            --severity HIGH,CRITICAL \
+            --exit-code 0 \
+            "${{ steps.image.outputs.prefix }}/${{ matrix.name }}:${{ steps.version.outputs.value }}"
+
+      - name: Upload Trivy SARIF
+        uses: github/codeql-action/upload-sarif@v4
+        if: always()
+        with:
+          sarif_file: trivy-${{ matrix.name }}.sarif
+
+      - name: Enforce Trivy vulnerability policy
+        run: |
+          set -euo pipefail
+          trivy image \
+            --skip-version-check \
+            --scanners vuln \
+            --format table \
+            --severity HIGH,CRITICAL \
+            --exit-code 1 \
+            "${{ steps.image.outputs.prefix }}/${{ matrix.name }}:${{ steps.version.outputs.value }}"
+
+      - name: Generate SBOM artifact
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.image.outputs.prefix }}/${{ matrix.name }}:${{ steps.version.outputs.value }}
+          format: spdx-json
+          output-file: ${{ matrix.name }}-sbom.spdx.json
+
+      - name: Verify forbidden files are absent
+        run: |
+          image="${{ steps.image.outputs.prefix }}/${{ matrix.name }}:${{ steps.version.outputs.value }}"
+          case "${{ matrix.name }}" in
+            frontend)
+              docker run --rm --entrypoint sh "$image" -c 'find /usr/share/nginx/html \( -name "*.map" -o -name ".env" -o -name ".git" -o -path "*/tests/*" \) | grep . && exit 1 || exit 0'
+              ;;
+            backend)
+              docker run --rm --entrypoint sh "$image" -c 'find /app \( -name ".env" -o -name ".git" -o -path "*/tests/*" -o -name "*.map" \) | grep . && exit 1 || exit 0'
+              ;;
+            gateway)
+              docker run --rm --entrypoint sh "$image" -c 'test ! -e /.git && test ! -e /.env'
+              ;;
+          esac
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign image
+        run: |
+          cosign sign --yes "${{ steps.image.outputs.prefix }}/${{ matrix.name }}:${{ steps.version.outputs.value }}"

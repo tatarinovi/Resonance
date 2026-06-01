@@ -1,0 +1,16 @@
+fastapi==0.116.1
+uvicorn[standard]==0.35.0
+sqlalchemy==2.0.43
+psycopg[binary]==3.2.9
+python-jose[cryptography]==3.5.0
+pydantic-settings==2.10.1
+argon2-cffi==25.1.0
+matrix-nio==0.25.2
+httpx[socks]==0.28.1
+boto3==1.37.1
+python-multipart==0.0.20
+apscheduler==3.10.4
+tzdata>=2024.2
+alembic==1.13.2
+pytest==8.3.3
+pytest-asyncio==0.24.0
