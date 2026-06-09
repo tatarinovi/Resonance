@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
@@ -75,6 +75,33 @@ def _ticket_title(ticket: Ticket) -> str:
     return ticket.title or data.get("title") or data.get("content") or f"Вопрос #{ticket.id}"
 
 
+def _question_activity_heatmap(tickets: list[Ticket], user: User, days: int = 182) -> list[dict[str, int | str]]:
+    today = datetime.utcnow().date()
+    start = today - timedelta(days=days - 1)
+    counts: dict[str, int] = {
+        (start + timedelta(days=i)).isoformat(): 0
+        for i in range(days)
+    }
+
+    def add(dt: datetime | None) -> None:
+        if not dt or dt.date() < start or dt.date() > today:
+            return
+        key = dt.date().isoformat()
+        counts[key] = counts.get(key, 0) + 1
+
+    for ticket in tickets:
+        if ticket.author_id == user.id:
+            add(ticket.created_at)
+        for message in ticket.messages or []:
+            if message.author_id == user.id:
+                add(message.created_at)
+        for event in ticket.events or []:
+            if event.actor_id == user.id:
+                add(event.created_at)
+
+    return [{"date": key, "count": counts[key]} for key in sorted(counts)]
+
+
 def _qa_status_key(epic: Epic) -> str:
     raw = epic.qa_block.status if epic.qa_block else EpicQAStatus.DRAFT.value
     value = str(raw or EpicQAStatus.DRAFT.value).strip().lower()
@@ -147,6 +174,7 @@ def profile_stats(user: User = Depends(get_current_user), db: Session = Depends(
         "authored_total": len(authored),
         "authored_closed": sum(1 for t in authored if t.status == TicketStatus.CLOSED),
         "assigned_open": len(assigned_open),
+        "question_heatmap": _question_activity_heatmap(tickets, user),
     }
 
 

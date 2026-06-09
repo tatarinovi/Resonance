@@ -1,0 +1,41 @@
+:80 {
+    encode gzip zstd
+
+    handle /health {
+        respond "ok" 200
+    }
+
+    handle /api/stream {
+        reverse_proxy backend:8000 {
+            transport http {
+                read_buffer 4KB
+                write_buffer 4KB
+                response_header_timeout 24h
+                read_timeout 24h
+                write_timeout 24h
+            }
+            flush_interval -1
+            header_up Connection ""
+            header_up X-Accel-Buffering "no"
+        }
+    }
+
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+
+    handle_path /files* {
+        rewrite * /attachments{uri}
+        reverse_proxy minio:9000
+    }
+
+    @static path /assets/* /favicon.ico /robots.txt
+    handle @static {
+        reverse_proxy frontend:8080
+    }
+
+    handle {
+        rewrite * /index.html
+        reverse_proxy frontend:8080
+    }
+}

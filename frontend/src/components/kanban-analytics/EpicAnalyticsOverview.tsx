@@ -57,6 +57,8 @@ const ROLE_BAR_FILLS = [
   "hsl(var(--chart-1))",
 ];
 
+const QA_TASK_BAR_LIMIT = 8;
+
 function pctOfTotal(value: number, total: number): string {
   if (!Number.isFinite(value) || !Number.isFinite(total) || total <= 0) return "0.0";
   return ((value / total) * 100).toFixed(1);
@@ -137,7 +139,7 @@ export function EpicAnalyticsOverview({
     }
     return Array.from(map.values())
       .sort((a, b) => b.hours - a.hours)
-      .slice(0, 15);
+      .slice(0, QA_TASK_BAR_LIMIT);
   }, [d.worklogs]);
 
   const qaUserPieData = useMemo(() => {
@@ -302,7 +304,7 @@ export function EpicAnalyticsOverview({
           {qaTaskBars.length === 0 ? (
             <p className="text-sm text-muted-foreground">Нет QA-списаний по задачам</p>
           ) : (
-            <ChartContainer config={qaTaskChartConfig} className="h-[min(420px,60vh)] w-full aspect-auto">
+            <ChartContainer config={qaTaskChartConfig} className="h-[360px] w-full aspect-auto">
               <BarChart layout="vertical" data={qaTaskBars} margin={{ top: 4, right: 52, left: 4, bottom: 4 }}>
                 <CartesianGrid horizontal={false} strokeDasharray="3 3" />
                 <XAxis type="number" hide />
@@ -386,7 +388,7 @@ export function EpicAnalyticsOverview({
           {hoursByRoleRows.every((r) => r.hours === 0) ? (
             <p className="text-sm text-muted-foreground">Нет списанных часов в эпике</p>
           ) : (
-            <ChartContainer config={roleHoursChartConfig} className="h-[300px] w-full aspect-auto">
+            <ChartContainer config={roleHoursChartConfig} className="h-[380px] w-full aspect-auto">
               <BarChart layout="vertical" data={hoursByRoleRows} margin={{ top: 4, right: 52, left: 4, bottom: 4 }}>
                 <CartesianGrid horizontal={false} strokeDasharray="3 3" />
                 <XAxis type="number" hide />

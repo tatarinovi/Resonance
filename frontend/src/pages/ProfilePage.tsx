@@ -5,7 +5,100 @@ import { questions } from "@/data/questions";
 import { StatusBadge } from "@/components/shared/StatusBadge";
 import { Link } from "@/lib/router";
 import { useProfileStats } from "@/lib/queries";
-import { Mail, HelpCircle, Activity, CheckCircle } from "lucide-react";
+import { Mail, HelpCircle, Activity, CheckCircle, Settings } from "lucide-react";
+
+type HeatmapDay = { date: string; count: number };
+
+const HEATMAP_DAYS = 182;
+
+function dateKey(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function buildQuestionHeatmapFallback(myQuestions: typeof questions, currentUserId: string): HeatmapDay[] {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const start = new Date(today);
+  start.setDate(start.getDate() - HEATMAP_DAYS + 1);
+
+  const counts = new Map<string, number>();
+  for (let i = 0; i < HEATMAP_DAYS; i += 1) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    counts.set(dateKey(d), 0);
+  }
+
+  const add = (iso: string | undefined) => {
+    if (!iso) return;
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return;
+    d.setHours(0, 0, 0, 0);
+    if (d < start || d > today) return;
+    const key = dateKey(d);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  };
+
+  for (const q of myQuestions) {
+    add(q.createdAt);
+    for (const message of q.thread ?? []) {
+      if (message.authorId === currentUserId) add(message.createdAt);
+    }
+  }
+
+  return Array.from(counts.entries()).map(([date, count]) => ({ date, count }));
+}
+
+function heatmapCellClass(count: number): string {
+  if (count <= 0) return "bg-muted/50";
+  if (count === 1) return "bg-primary/25";
+  if (count <= 3) return "bg-primary/45";
+  if (count <= 6) return "bg-primary/70";
+  return "bg-primary";
+}
+
+function formatHeatmapDate(date: string): string {
+  return new Intl.DateTimeFormat("ru-RU", { day: "numeric", month: "short" }).format(new Date(`${date}T00:00:00`));
+}
+
+function QuestionHeatmap({ days }: { days: HeatmapDay[] }) {
+  const total = days.reduce((sum, day) => sum + day.count, 0);
+  const activeDays = days.filter((day) => day.count > 0).length;
+
+  return (
+    <div className="bg-card border border-border rounded-xl p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">Активность по вопросам</h3>
+          <p className="mt-1 text-xs text-muted-foreground">{activeDays} активн. дней · {total} действий</p>
+        </div>
+      </div>
+      <div className="mt-4 overflow-hidden">
+        <div className="grid grid-flow-col grid-rows-7 gap-[3px]">
+          {days.map((day) => (
+            <div
+              key={day.date}
+              className={`h-2 w-2 rounded-[2px] ${heatmapCellClass(day.count)}`}
+              title={`${formatHeatmapDate(day.date)}: ${day.count} действ.`}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground">
+        <span>26 недель</span>
+        <div className="flex items-center gap-1.5">
+          <span>меньше</span>
+          {[0, 1, 3, 6, 9].map((count) => (
+            <span key={count} className={`h-2 w-2 rounded-[2px] ${heatmapCellClass(count)}`} />
+          ))}
+          <span>больше</span>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   useDataBridgeVersion();
@@ -17,6 +110,7 @@ export default function ProfilePage() {
   const closedQ = profileStats.data?.authored_closed ?? myQ.filter(q => q.status === "Закрыт").length;
   const assignedQ = profileStats.data?.assigned_open ?? questions.filter(q => q.assigneeId === currentUser.id && !["Закрыт", "Отменён"].includes(q.status)).length;
   const authoredTotal = profileStats.data?.authored_total ?? myQ.length;
+  const questionHeatmap = profileStats.data?.question_heatmap ?? buildQuestionHeatmapFallback(myQ, currentUser.id);
 
   const roleColors: Record<string, string> = {
     Координатор: "bg-blue-500/15 text-blue-400",
@@ -41,7 +135,7 @@ export default function ProfilePage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Profile card */}
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-4">
           <div className="bg-card border border-border rounded-xl p-5 text-center">
             <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-white font-bold text-xl mx-auto mb-3">
               {currentUser.avatarInitials}
@@ -67,7 +161,15 @@ export default function ProfilePage() {
                 </div>
               ))}
             </div>
+            <Link href="/settings">
+              <span className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent">
+                <Settings size={14} />
+                Настройки профиля
+              </span>
+            </Link>
           </div>
+
+          <QuestionHeatmap days={questionHeatmap} />
         </div>
 
         {/* Activity + questions */}

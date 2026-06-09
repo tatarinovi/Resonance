@@ -355,6 +355,7 @@ export interface ApiProfileStats {
   authored_total: number;
   authored_closed: number;
   assigned_open: number;
+  question_heatmap?: { date: string; count: number }[];
 }
 
 export interface ApiStatisticsSummary {
