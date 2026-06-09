@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 import httpx
+from json import JSONDecodeError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from datetime import datetime
@@ -77,6 +78,26 @@ def _normalize_optional_str(value: object) -> str | None:
         return None
     s = str(value).strip()
     return s or None
+
+
+def _extract_kanban_auth_token(response: httpx.Response) -> str:
+    if response.status_code >= 400:
+        raise HTTPException(status_code=401, detail="Invalid Kanban credentials.")
+    if not (response.content or b"").strip():
+        raise HTTPException(status_code=502, detail="Unexpected Kanban auth response.")
+
+    try:
+        data = response.json()
+    except (JSONDecodeError, ValueError) as exc:
+        raise HTTPException(status_code=502, detail="Unexpected Kanban auth response.") from exc
+
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=502, detail="Unexpected Kanban auth response.")
+
+    token = data.get("token") or data.get("access_token") or (data.get("data") or {}).get("token")
+    if not token or not isinstance(token, str):
+        raise HTTPException(status_code=502, detail="Unexpected Kanban auth response.")
+    return token
 
 
 @router.put("/me", response_model=MeResponse)
@@ -167,13 +188,7 @@ def connect_kanban(
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"Kanban auth failed: {exc}") from exc
 
-    if response.status_code >= 400:
-        raise HTTPException(status_code=401, detail="Invalid Kanban credentials.")
-
-    data = response.json()
-    token = data.get("token") or data.get("access_token") or (data.get("data") or {}).get("token")
-    if not token or not isinstance(token, str):
-        raise HTTPException(status_code=502, detail="Unexpected Kanban auth response.")
+    token = _extract_kanban_auth_token(response)
 
     user.kanban_token = token
     db.commit()

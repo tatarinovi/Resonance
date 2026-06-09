@@ -1275,6 +1275,15 @@ def kanban_epic_charts_live(
         tracked_hours=tracked_hours,
     )
 
+    return {
+        **detail,
+        "charts_ready": True,
+        "epic": {
+            **(detail.get("epic") or {}),
+            "local_meta": local_meta,
+        },
+    }
+
 
 @router.get("/kanban/epics/{epic_id}")
 def kanban_epic_detail(
