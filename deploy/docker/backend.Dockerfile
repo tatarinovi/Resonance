@@ -9,7 +9,9 @@ WORKDIR /build
 COPY backend/requirements.prod.txt ./requirements.txt
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
-    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt
+    && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade PyJWT==2.12.0 jaraco.context==6.1.0 wheel==0.46.2 \
+    && /opt/venv/bin/pip check
 
 FROM python:3.11-slim AS runtime
 

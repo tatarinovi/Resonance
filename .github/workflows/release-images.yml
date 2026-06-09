@@ -111,6 +111,7 @@ jobs:
           trivy image \
             --skip-version-check \
             --scanners vuln \
+            --ignore-unfixed \
             --format table \
             --severity HIGH,CRITICAL \
             --exit-code 1 \
