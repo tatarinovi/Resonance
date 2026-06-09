@@ -10,6 +10,9 @@ RUN npm run build && find dist -type f -name "*.map" -delete
 
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 
+USER root
+RUN apk upgrade --no-cache
+
 COPY deploy/docker/nginx.frontend.conf /etc/nginx/conf.d/default.conf
 COPY --from=build /app/dist /usr/share/nginx/html
 
