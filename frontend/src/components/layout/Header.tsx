@@ -240,7 +240,7 @@ export function Header({ onMenuClick }: HeaderProps) {
         <NotificationBell />
         <Link href="/profile">
           <span className="cursor-pointer">
-            <UserAvatar userId={currentUser.id} size="sm" />
+            <UserAvatar userId={currentUser.id} size="sm" tooltipAlign="end" />
           </span>
         </Link>
       </div>

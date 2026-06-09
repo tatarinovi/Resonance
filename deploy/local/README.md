@@ -19,7 +19,7 @@ Open:
 Default login:
 
 - Username: `admin`
-- Password: `admin`
+- Password: `resonance-local-admin-password`
 
 ## Local Overrides
 

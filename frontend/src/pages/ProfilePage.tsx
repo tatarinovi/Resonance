@@ -86,8 +86,7 @@ function QuestionHeatmap({ days }: { days: HeatmapDay[] }) {
           ))}
         </div>
       </div>
-      <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground">
-        <span>13 недель</span>
+      <div className="mt-3 flex items-center justify-end text-[10px] text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <span>меньше</span>
           {[0, 1, 3, 6, 9].map((count) => (
@@ -128,12 +127,12 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-4xl mx-auto">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <div className="mb-5">
         <h1 className="text-lg font-semibold">Профиль</h1>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
         {/* Profile card */}
         <div className="lg:col-span-1 space-y-4">
           <div className="bg-card border border-border rounded-xl p-5 text-center">
