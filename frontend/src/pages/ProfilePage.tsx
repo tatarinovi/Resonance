@@ -9,7 +9,7 @@ import { Mail, HelpCircle, Activity, CheckCircle, Settings } from "lucide-react"
 
 type HeatmapDay = { date: string; count: number };
 
-const HEATMAP_DAYS = 182;
+const HEATMAP_DAYS = 91;
 
 function dateKey(date: Date): string {
   const y = date.getFullYear();
@@ -87,7 +87,7 @@ function QuestionHeatmap({ days }: { days: HeatmapDay[] }) {
         </div>
       </div>
       <div className="mt-3 flex items-center justify-between text-[10px] text-muted-foreground">
-        <span>26 недель</span>
+        <span>13 недель</span>
         <div className="flex items-center gap-1.5">
           <span>меньше</span>
           {[0, 1, 3, 6, 9].map((count) => (

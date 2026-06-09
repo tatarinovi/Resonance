@@ -75,7 +75,7 @@ def _ticket_title(ticket: Ticket) -> str:
     return ticket.title or data.get("title") or data.get("content") or f"Вопрос #{ticket.id}"
 
 
-def _question_activity_heatmap(tickets: list[Ticket], user: User, days: int = 182) -> list[dict[str, int | str]]:
+def _question_activity_heatmap(tickets: list[Ticket], user: User, days: int = 91) -> list[dict[str, int | str]]:
     today = datetime.utcnow().date()
     start = today - timedelta(days=days - 1)
     counts: dict[str, int] = {
