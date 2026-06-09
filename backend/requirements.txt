@@ -12,8 +12,6 @@ python-multipart==0.0.27
 apscheduler==3.10.4
 tzdata>=2024.2
 alembic==1.13.2
-jaraco.context==6.1.0
 starlette==0.49.1
-wheel==0.46.2
 pytest==8.3.3
 pytest-asyncio==0.24.0

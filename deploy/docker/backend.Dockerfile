@@ -10,7 +10,7 @@ COPY backend/requirements.prod.txt ./requirements.txt
 RUN python -m venv /opt/venv \
     && /opt/venv/bin/pip install --upgrade pip \
     && /opt/venv/bin/pip install --no-cache-dir -r requirements.txt \
-    && /opt/venv/bin/pip install --no-cache-dir --upgrade PyJWT==2.12.0 jaraco.context==6.1.0 wheel==0.46.2 \
+    && /opt/venv/bin/pip install --no-cache-dir --upgrade PyJWT==2.12.0 \
     && /opt/venv/bin/pip check
 
 FROM python:3.11-slim AS runtime
@@ -27,6 +27,15 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
+RUN rm -f /opt/venv/bin/pip* \
+    && find /opt/venv/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages \
+        -maxdepth 1 \( \
+            -iname "pip*" \
+            -o -iname "setuptools*" \
+            -o -iname "wheel*" \
+            -o -iname "jaraco*" \
+            -o -iname "backports.tarfile*" \
+        \) -exec rm -rf {} +
 COPY backend/alembic.ini ./
 COPY backend/migrations ./migrations
 COPY backend/app ./app
