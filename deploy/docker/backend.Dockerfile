@@ -2,6 +2,7 @@ FROM python:3.11-slim AS builder
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends build-essential libolm-dev \
+    && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
@@ -18,6 +19,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl libolm-dev \
+    && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/* \
     && useradd --create-home --shell /usr/sbin/nologin app
 

@@ -1,7 +1,8 @@
 from datetime import datetime, timedelta, timezone
 
+import jwt
 from argon2 import PasswordHasher
-from jose import JWTError, jwt
+from jwt import InvalidTokenError
 
 from .config import get_settings
 
@@ -30,5 +31,5 @@ def decode_access_token(token: str) -> str | None:
     try:
         payload = jwt.decode(token, settings.jwt_secret, algorithms=[settings.jwt_algorithm])
         return payload.get("sub")
-    except JWTError:
+    except InvalidTokenError:
         return None
