@@ -9,7 +9,7 @@ import { Mail, HelpCircle, Activity, CheckCircle, Settings } from "lucide-react"
 
 type HeatmapDay = { date: string; count: number };
 
-const HEATMAP_DAYS = 91;
+const HEATMAP_DAYS = 140;
 
 function dateKey(date: Date): string {
   const y = date.getFullYear();
@@ -75,18 +75,18 @@ function QuestionHeatmap({ days }: { days: HeatmapDay[] }) {
           <p className="mt-1 text-xs text-muted-foreground">{activeDays} активн. дней · {total} действий</p>
         </div>
       </div>
-      <div className="mt-4 overflow-hidden">
-        <div className="grid grid-flow-col grid-rows-7 gap-[3px]">
+      <div className="mt-4 flex justify-center overflow-hidden">
+        <div className="grid grid-flow-col grid-rows-7 auto-cols-[10px] gap-[3px]">
           {days.map((day) => (
             <div
               key={day.date}
-              className={`h-2 w-2 rounded-[2px] ${heatmapCellClass(day.count)}`}
+              className={`h-2.5 w-2.5 rounded-[3px] ${heatmapCellClass(day.count)}`}
               title={`${formatHeatmapDate(day.date)}: ${day.count} действ.`}
             />
           ))}
         </div>
       </div>
-      <div className="mt-3 flex items-center justify-end text-[10px] text-muted-foreground">
+      <div className="mt-3 flex items-center justify-center text-[10px] text-muted-foreground">
         <div className="flex items-center gap-1.5">
           <span>меньше</span>
           {[0, 1, 3, 6, 9].map((count) => (
@@ -127,14 +127,14 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="p-4 md:p-6 max-w-3xl mx-auto">
+    <div className="mx-auto w-full max-w-6xl p-4 md:p-6">
       <div className="mb-5">
         <h1 className="text-lg font-semibold">Профиль</h1>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[260px_minmax(0,1fr)]">
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_300px]">
         {/* Profile card */}
-        <div className="lg:col-span-1 space-y-4">
+        <div className="space-y-4 lg:order-2">
           <div className="bg-card border border-border rounded-xl p-5 text-center">
             <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-white font-bold text-xl mx-auto mb-3">
               {currentUser.avatarInitials}
@@ -172,7 +172,7 @@ export default function ProfilePage() {
         </div>
 
         {/* Activity + questions */}
-        <div className="lg:col-span-2 space-y-4">
+        <div className="space-y-4 lg:order-1">
           <div className="bg-card border border-border rounded-xl p-4 md:p-5">
             <h3 className="text-sm font-semibold text-foreground mb-4">Мои вопросы</h3>
             {myQ.length === 0

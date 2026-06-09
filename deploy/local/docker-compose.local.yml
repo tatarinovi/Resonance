@@ -35,7 +35,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:-resonance-local-jwt-secret-change-before-sharing}
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-4320}
       DEFAULT_ADMIN_USERNAME: ${DEFAULT_ADMIN_USERNAME:-admin}
-      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-resonance-local-admin-password}
+      DEFAULT_ADMIN_PASSWORD: ${DEFAULT_ADMIN_PASSWORD:-adminadmin}
       RUN_MIGRATIONS_ON_STARTUP: ${RUN_MIGRATIONS_ON_STARTUP:-true}
       MATRIX_HOMESERVER: ${MATRIX_HOMESERVER:-https://matrix.example.com}
       MATRIX_USER_ID: ${MATRIX_USER_ID:-@bot:example.com}
