@@ -760,7 +760,13 @@ export default function EpicDetailPage() {
                         <UserAvatar userId={c.authorId} size="sm" />
                         <div>
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
-                            <span className="text-xs font-semibold text-foreground">{author?.name}</span>
+                            {author ? (
+                              <Link href={`/users/${refIdToNumeric(author.id) ?? author.id}`}>
+                                <span className="text-xs font-semibold text-foreground hover:underline">{author.name}</span>
+                              </Link>
+                            ) : (
+                              <span className="text-xs font-semibold text-foreground">{c.authorId}</span>
+                            )}
                             <span className="text-[10px] text-muted-foreground">{formatDate(c.createdAt)}</span>
                           </div>
                           <p className="text-sm text-foreground/85">{c.text}</p>
@@ -826,7 +832,13 @@ export default function EpicDetailPage() {
                   <UserAvatar userId={uid as string} size="sm" />
                   <div>
                     <p className="text-[10px] text-muted-foreground">{role as string}</p>
-                    <p className="text-xs text-foreground font-medium">{user?.name}</p>
+                    {user ? (
+                      <Link href={`/users/${refIdToNumeric(user.id) ?? user.id}`}>
+                        <span className="text-xs text-foreground font-medium hover:underline">{user.name}</span>
+                      </Link>
+                    ) : (
+                      <p className="text-xs text-foreground font-medium">{uid as string}</p>
+                    )}
                   </div>
                 </div>
               );

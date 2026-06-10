@@ -26,6 +26,7 @@ import RegisterPage from "@/pages/RegisterPage";
 import SettingsPage from "@/pages/SettingsPage";
 import StatisticsPage from "@/pages/StatisticsPage";
 import UsersPage from "@/pages/UsersPage";
+import UserProfilePage from "@/pages/UserProfilePage";
 import KanbanProjectBoardPage from "@/pages/KanbanProjectBoardPage";
 import KanbanProjectMemberRolesPage from "@/pages/KanbanProjectMemberRolesPage";
 import KanbanProjectsPage from "@/pages/KanbanProjectsPage";
@@ -74,6 +75,7 @@ export default function App() {
               <Route path="/activity" element={<ShellRoute><ActivityPage /></ShellRoute>} />
               <Route path="/statistics" element={<ShellRoute><StatisticsPage /></ShellRoute>} />
               <Route path="/users" element={<ShellRoute><RequireAdmin><UsersPage /></RequireAdmin></ShellRoute>} />
+              <Route path="/users/:id" element={<ShellRoute><UserProfilePage /></ShellRoute>} />
               <Route
                 path="/admin/feedback"
                 element={

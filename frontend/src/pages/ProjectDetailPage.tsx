@@ -306,7 +306,13 @@ export default function ProjectDetailPage() {
                     <div key={userId} className="flex items-center gap-2">
                       <UserAvatar userId={userId} size="sm" />
                       <div className="min-w-0">
-                        <p className="text-sm text-foreground truncate">{user?.name ?? userId}</p>
+                        {user ? (
+                          <Link href={`/users/${refIdToNumeric(user.id) ?? user.id}`}>
+                            <span className="text-sm text-foreground truncate hover:underline">{user.name}</span>
+                          </Link>
+                        ) : (
+                          <p className="text-sm text-foreground truncate">{userId}</p>
+                        )}
                         {user && <p className="text-[10px] text-muted-foreground">{user.role}</p>}
                       </div>
                     </div>

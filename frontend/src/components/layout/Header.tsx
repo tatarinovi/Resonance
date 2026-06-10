@@ -238,11 +238,7 @@ export function Header({ onMenuClick }: HeaderProps) {
           <RoleSwitcher />
         </div>
         <NotificationBell />
-        <Link href="/profile">
-          <span className="cursor-pointer">
-            <UserAvatar userId={currentUser.id} size="sm" tooltipAlign="end" />
-          </span>
-        </Link>
+        <UserAvatar userId={currentUser.id} size="sm" tooltipAlign="end" tooltipSide="bottom" href="/profile" />
       </div>
     </header>
   );

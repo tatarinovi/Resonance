@@ -69,6 +69,7 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)) ->
         kanban_connected=bool(user.kanban_token),
         direction=user.direction,
         project_ids=[p.id for p in user.projects],
+        last_login_at=user.last_login_at,
         personal_channel_mode=get_personal_channel_mode(db, user.id),
     )
 
@@ -160,6 +161,7 @@ def update_me(
         kanban_connected=bool(user.kanban_token),
         direction=user.direction,
         project_ids=[p.id for p in user.projects],
+        last_login_at=user.last_login_at,
         personal_channel_mode=get_personal_channel_mode(db, user.id),
     )
 
@@ -207,6 +209,7 @@ def connect_kanban(
         kanban_connected=True,
         direction=user.direction,
         project_ids=[p.id for p in user.projects],
+        last_login_at=user.last_login_at,
         personal_channel_mode=get_personal_channel_mode(db, user.id),
     )
 

@@ -94,16 +94,16 @@ function BackendSummaryStrip({ summary }: { summary?: ApiDashboardAggregate }) {
 function QuestionRow({ q, compact = false }: { q: typeof questions[0]; compact?: boolean }) {
   return (
     <Link href={`/questions/${q.id}`}>
-      <div className={`flex flex-wrap items-start gap-x-2 gap-y-1.5 px-2 sm:px-3 py-2.5 rounded-md hover:bg-accent/50 cursor-pointer transition-colors group ${compact ? "flex-col" : ""}`}>
-        <span className="text-[10px] text-muted-foreground font-mono w-12 flex-shrink-0">{q.id}</span>
-        <div className="flex-1 min-w-[min(100%,10rem)] basis-0 grow">
+      <div className={`flex items-start gap-2 px-2 sm:px-3 py-2.5 rounded-md hover:bg-accent/50 cursor-pointer transition-colors group ${compact ? "flex-col" : ""}`}>
+        <span className="text-[10px] text-muted-foreground font-mono w-12 flex-shrink-0 pt-0.5">{q.id}</span>
+        <div className="flex-1 min-w-0">
           <p className="text-sm text-foreground group-hover:text-primary line-clamp-2">{q.title}</p>
           <div className="flex items-center gap-2 mt-1 flex-wrap min-w-0">
             <ProjectBadge projectId={q.projectId} />
             <UserAvatar userId={q.assigneeId} size="sm" />
           </div>
         </div>
-        <div className={`flex flex-wrap items-center gap-1 sm:gap-2 ${compact ? "w-full" : "ml-auto"}`}>
+        <div className={`flex flex-shrink-0 items-center gap-1 sm:gap-2 ${compact ? "w-full" : "ml-auto pt-0.5"}`}>
           <StatusBadge status={q.status} size="sm" />
           <QuestionStagnationBadge updatedAt={q.updatedAt} />
         </div>
@@ -373,7 +373,7 @@ function AdminDashboard() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
         <div className="bg-card border border-border rounded-lg p-4">
           <SectionTitle>Распределение по ролям</SectionTitle>
           {Object.entries(roleCount).map(([role, count]) => (

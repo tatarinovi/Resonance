@@ -11,6 +11,7 @@ from ..database import get_db
 from ..deps import get_current_user
 from ..models import Epic, EpicBlocker, EpicQAStatus, Ticket, TicketStatus, User, UserRole
 from ..reference_data import EPIC_STATUS_LABELS, QA_STATUS_LABELS, QUESTION_PRIORITY_LABELS, QUESTION_STATUS_LABELS
+from ..schemas import UserProfileStats, UserPublicProfile
 from .dashboard import _apply_ticket_visibility, _ticket_query
 
 router = APIRouter(tags=["aggregates"])
@@ -102,6 +103,42 @@ def _question_activity_heatmap(tickets: list[Ticket], user: User, days: int = 14
     return [{"date": key, "count": counts[key]} for key in sorted(counts)]
 
 
+def _profile_user_or_404(db: Session, viewer: User, user_id: int) -> User:
+    profile_user = db.scalar(select(User).options(selectinload(User.projects)).where(User.id == user_id))
+    if not profile_user or (not profile_user.is_approved and viewer.role != UserRole.ADMIN):
+        raise HTTPException(status_code=404, detail="User not found")
+    return profile_user
+
+
+def _public_profile(user: User) -> UserPublicProfile:
+    return UserPublicProfile(
+        id=user.id,
+        username=user.username,
+        role=user.role,
+        workspace=user.workspace,
+        telegram_id=user.telegram_id,
+        matrix_id=user.matrix_id,
+        direction=user.direction,
+        project_ids=[p.id for p in user.projects],
+        created_at=user.created_at,
+        last_login_at=user.last_login_at,
+    )
+
+
+def _profile_stats_for_visible_tickets(tickets: list[Ticket], profile_user: User) -> UserProfileStats:
+    authored = [t for t in tickets if t.author_id == profile_user.id]
+    assigned_open = [
+        t for t in tickets
+        if t.assignee_id == profile_user.id and t.status not in {TicketStatus.CLOSED, TicketStatus.CANCELLED}
+    ]
+    return UserProfileStats(
+        authored_total=len(authored),
+        authored_closed=sum(1 for t in authored if t.status == TicketStatus.CLOSED),
+        assigned_open=len(assigned_open),
+        question_heatmap=_question_activity_heatmap(tickets, profile_user),
+    )
+
+
 def _qa_status_key(epic: Epic) -> str:
     raw = epic.qa_block.status if epic.qa_block else EpicQAStatus.DRAFT.value
     value = str(raw or EpicQAStatus.DRAFT.value).strip().lower()
@@ -162,20 +199,31 @@ def dashboard_summary(
     }
 
 
-@router.get("/profile/stats")
-def profile_stats(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+@router.get("/profile/stats", response_model=UserProfileStats)
+def profile_stats(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> UserProfileStats:
     tickets = _visible_tickets(db, user)
-    authored = [t for t in tickets if t.author_id == user.id]
-    assigned_open = [
-        t for t in tickets
-        if t.assignee_id == user.id and t.status not in {TicketStatus.CLOSED, TicketStatus.CANCELLED}
-    ]
-    return {
-        "authored_total": len(authored),
-        "authored_closed": sum(1 for t in authored if t.status == TicketStatus.CLOSED),
-        "assigned_open": len(assigned_open),
-        "question_heatmap": _question_activity_heatmap(tickets, user),
-    }
+    return _profile_stats_for_visible_tickets(tickets, user)
+
+
+@router.get("/users/{user_id}/profile", response_model=UserPublicProfile)
+def user_public_profile(
+    user_id: int,
+    viewer: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserPublicProfile:
+    profile_user = _profile_user_or_404(db, viewer, user_id)
+    return _public_profile(profile_user)
+
+
+@router.get("/users/{user_id}/profile/stats", response_model=UserProfileStats)
+def user_public_profile_stats(
+    user_id: int,
+    viewer: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> UserProfileStats:
+    profile_user = _profile_user_or_404(db, viewer, user_id)
+    tickets = _visible_tickets(db, viewer)
+    return _profile_stats_for_visible_tickets(tickets, profile_user)
 
 
 @router.get("/statistics/summary")

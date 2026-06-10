@@ -32,6 +32,19 @@ export interface ApiMe extends ApiUser {
   personal_channel_mode?: PersonalChannelMode;
 }
 
+export interface ApiUserPublicProfile {
+  id: number;
+  username: string;
+  role: BackendUserRole;
+  workspace: string;
+  telegram_id: string | null;
+  matrix_id: string | null;
+  direction: string | null;
+  project_ids: number[];
+  created_at: string;
+  last_login_at: string | null;
+}
+
 export interface ApiProject {
   id: number;
   name: string;

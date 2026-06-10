@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
+import { Link } from "@/lib/router";
 import { useCreateUser, useDeleteUser, useReferenceData, useUpdateUser, useUsers as useUsersQuery } from "@/lib/queries";
 import {
   ADMIN_EDITABLE_ROLES,
@@ -84,7 +85,9 @@ function UserCard({ u, onEdit }: { u: RefUser; onEdit: () => void }) {
       <UserAvatar userId={u.id} size="md" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap mb-1">
-          <p className="text-sm font-medium text-foreground">{u.name}</p>
+          <Link href={`/users/${refIdToNumeric(u.id) ?? u.id}`}>
+            <span className="text-sm font-medium text-foreground hover:underline">{u.name}</span>
+          </Link>
           <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${roleColors[u.role]}`}>{u.role}</span>
         </div>
         <p className="text-xs text-muted-foreground">{u.email}</p>
@@ -257,7 +260,9 @@ export default function UsersPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2.5">
                         <UserAvatar userId={u.id} size="md" />
-                        <span className="text-sm font-medium text-foreground">{u.name}</span>
+                        <Link href={`/users/${refIdToNumeric(u.id) ?? u.id}`}>
+                          <span className="text-sm font-medium text-foreground hover:underline">{u.name}</span>
+                        </Link>
                       </div>
                     </td>
                     <td className="px-3 py-3 text-xs text-muted-foreground">{u.email}</td>

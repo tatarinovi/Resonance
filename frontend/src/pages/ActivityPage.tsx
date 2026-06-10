@@ -6,7 +6,7 @@ import { users } from "@/data/users";
 import { ListPagination } from "@/components/shared/ListPagination";
 import { UserAvatar } from "@/components/shared/UserAvatar";
 import { formatCalendarDay, formatTime } from "@/lib/formatDateTime";
-import { mapActivity } from "@/lib/mappers";
+import { mapActivity, refIdToNumeric } from "@/lib/mappers";
 import { useActivity } from "@/lib/queries";
 import { Link } from "@/lib/router";
 
@@ -118,18 +118,30 @@ export default function ActivityPage() {
               const border = typeBorder[event.type];
               const Icon = typeIcon[event.type];
               return (
-                <div key={event.id} className={`flex gap-2.5 pl-3 border-l-2 ${border} bg-card rounded-r-lg py-2.5 pr-3`} data-testid={`activity-${event.id}`}>
-                  <UserAvatar userId={event.userId} size="sm" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start gap-1 flex-wrap">
-                      <span className="text-xs font-semibold text-foreground whitespace-nowrap">{user?.name ?? "Система"}</span>
-                      <span className="text-xs text-muted-foreground">{event.action}</span>
+                <div
+                  key={event.id}
+                  className={`grid grid-cols-[24px_minmax(0,1fr)_auto] items-start gap-2.5 pl-3 border-l-2 ${border} bg-card rounded-r-lg py-2.5 pr-3`}
+                  data-testid={`activity-${event.id}`}
+                >
+                  <div className="pt-0.5">
+                    <UserAvatar userId={event.userId} size="sm" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex min-w-0 items-baseline gap-1.5">
+                      {user ? (
+                        <Link href={`/users/${refIdToNumeric(user.id) ?? user.id}`}>
+                          <span className="block max-w-[140px] truncate text-xs font-semibold text-foreground hover:underline sm:max-w-[220px]">{user.name}</span>
+                        </Link>
+                      ) : (
+                        <span className="text-xs font-semibold text-foreground">Система</span>
+                      )}
+                      <span className="min-w-0 truncate text-xs text-muted-foreground">{event.action}</span>
                     </div>
                     <Link href={event.targetType === "question" ? `/questions/${event.targetId}` : `/epics/${event.targetId}`}>
                       <span className="text-xs text-primary hover:underline cursor-pointer line-clamp-1 block mt-0.5">{event.targetTitle}</span>
                     </Link>
                   </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  <div className="flex flex-col items-end gap-1">
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground inline-flex items-center gap-1">
                       <Icon size={10} />
                       {typeLabel[event.type]}

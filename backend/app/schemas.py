@@ -135,6 +135,26 @@ class UserDirectoryEntry(BaseModel):
     last_login_at: ApiDatetime | None = None
 
 
+class UserPublicProfile(BaseModel):
+    id: int
+    username: str
+    role: UserRole
+    workspace: UserWorkspace = UserWorkspace.DS
+    telegram_id: str | None = None
+    matrix_id: str | None = None
+    direction: str | None = None
+    project_ids: list[int]
+    created_at: ApiDatetime
+    last_login_at: ApiDatetime | None = None
+
+
+class UserProfileStats(BaseModel):
+    authored_total: int
+    authored_closed: int
+    assigned_open: int
+    question_heatmap: list[dict[str, int | str]] = Field(default_factory=list)
+
+
 class ProjectConfig(BaseModel):
     description: str = ""
     user_ids: list[int] = Field(default_factory=list)
@@ -303,6 +323,7 @@ class MeResponse(BaseModel):
     kanban_connected: bool = False
     direction: str | None = None
     project_ids: list[int]
+    last_login_at: ApiDatetime | None = None
     personal_channel_mode: str = "both"
 
 

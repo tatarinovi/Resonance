@@ -32,6 +32,7 @@ import type {
   ApiTicket,
   ApiTicketPage,
   ApiUser,
+  ApiUserPublicProfile,
   BackendUserRole,
   EpicQAStatus,
   EpicTestStage,
@@ -62,6 +63,8 @@ export const queryKeys = {
   reference: ["reference"] as const,
   dashboardAggregate: (persona?: string | null) => ["dashboard-summary", persona ?? null] as const,
   profileStats: ["profile-stats"] as const,
+  userProfile: (userId: number) => ["user-profile", userId] as const,
+  userProfileStats: (userId: number) => ["user-profile-stats", userId] as const,
   statisticsSummary: (params?: Record<string, unknown>) => ["statistics-summary", params ?? {}] as const,
 };
 
@@ -1006,6 +1009,24 @@ export function useProfileStats() {
   return useQuery({
     queryKey: queryKeys.profileStats,
     queryFn: () => api.get<ApiProfileStats>("/profile/stats"),
+    staleTime: 15_000,
+  });
+}
+
+export function useUserProfile(userId: number | null) {
+  return useQuery({
+    queryKey: userId != null ? queryKeys.userProfile(userId) : ["user-profile", "invalid"],
+    queryFn: () => api.get<ApiUserPublicProfile>(`/users/${userId}/profile`),
+    enabled: userId != null,
+    staleTime: 60_000,
+  });
+}
+
+export function useUserProfileStats(userId: number | null) {
+  return useQuery({
+    queryKey: userId != null ? queryKeys.userProfileStats(userId) : ["user-profile-stats", "invalid"],
+    queryFn: () => api.get<ApiProfileStats>(`/users/${userId}/profile/stats`),
+    enabled: userId != null,
     staleTime: 15_000,
   });
 }

@@ -398,7 +398,13 @@ export default function QuestionDetailPage() {
                     <UserAvatar userId={msg.authorId} size="sm" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <span className="text-xs font-semibold text-foreground">{author?.name ?? msg.authorId}</span>
+                        {author ? (
+                          <Link href={`/users/${refIdToNumeric(author.id) ?? author.id}`}>
+                            <span className="text-xs font-semibold text-foreground hover:underline">{author.name}</span>
+                          </Link>
+                        ) : (
+                          <span className="text-xs font-semibold text-foreground">{msg.authorId}</span>
+                        )}
                         {author && (
                           <span className="text-[10px] text-muted-foreground/60 px-1.5 py-0.5 bg-muted rounded">
                             {author.role}
