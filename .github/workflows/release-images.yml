@@ -30,7 +30,7 @@ jobs:
       JWT_SECRET: release-gate-jwt-secret-at-least-32-chars
       DEFAULT_ADMIN_USERNAME: admin
       DEFAULT_ADMIN_PASSWORD: adminadmin
-      DATABASE_URL: sqlite+pysqlite:///:memory:
+      DATABASE_URL: "sqlite+pysqlite:///:memory:"
       RUN_MIGRATIONS_ON_STARTUP: "false"
       RUN_STARTUP_DIGEST_TEST: "false"
 

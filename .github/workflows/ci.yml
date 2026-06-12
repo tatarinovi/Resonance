@@ -18,7 +18,7 @@ jobs:
       JWT_SECRET: ci-secret-key
       DEFAULT_ADMIN_USERNAME: admin
       DEFAULT_ADMIN_PASSWORD: admin-password
-      DATABASE_URL: sqlite+pysqlite:///:memory:
+      DATABASE_URL: "sqlite+pysqlite:///:memory:"
       RUN_MIGRATIONS_ON_STARTUP: "false"
       RUN_STARTUP_DIGEST_TEST: "false"
     steps:
