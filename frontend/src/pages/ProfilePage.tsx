@@ -213,10 +213,10 @@ export function UserProfileView({
   const questionHeatmap = stats?.question_heatmap ?? buildQuestionHeatmapFallback(myQ, user.id);
 
   const roleColors: Record<string, string> = {
-    Координатор: "bg-blue-500/15 text-blue-400",
-    "Эксперт": "bg-emerald-500/15 text-emerald-400",
-    "Разработчик": "bg-amber-500/15 text-amber-400",
-    "Админ": "bg-red-500/15 text-red-400",
+    Координатор: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+    "Эксперт": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+    "Разработчик": "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+    "Админ": "bg-red-500/15 text-red-700 dark:text-red-400",
   };
 
   function timeAgo(iso: string) {

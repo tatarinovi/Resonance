@@ -13,20 +13,20 @@ import {
 import { toast } from "sonner";
 
 const roleUsers: Record<Role, string> = {
-  Координатор: "U-001",
-  Эксперт: "U-003",
-  Разработчик: "U-004",
-  Админ: "U-005",
+  "Координатор": "U-001",
+  "Эксперт": "U-003",
+  "Разработчик": "U-004",
+  "Админ": "U-005",
 };
 
 const roleColors: Record<Role, string> = {
-  Координатор: "text-blue-400",
-  Эксперт: "text-emerald-400",
-  Разработчик: "text-amber-400",
-  Админ: "text-red-400",
+  "Координатор": "text-blue-700 dark:text-blue-400",
+  "Эксперт": "text-emerald-700 dark:text-emerald-400",
+  "Разработчик": "text-amber-700 dark:text-amber-400",
+  "Админ": "text-red-700 dark:text-red-400",
 };
 
-/** После входа роль задаётся учётной записью на сервере; «демо» не переключает JWT. */
+/** После входа роль задаётся учётной записью на сервере; демо не переключает JWT. */
 export function RoleSwitcher() {
   const { currentUser, setCurrentUserId } = useRole();
   const { me } = useAuth();

@@ -2,6 +2,7 @@ import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { Toaster } from "sonner";
 
 import { useDataBridgeVersion } from "@/data/_bridge";
+import { useThemePreference } from "@/contexts/ThemeContext";
 import { useEventStream } from "@/lib/useEventStream";
 
 import { Header } from "./Header";
@@ -40,6 +41,7 @@ function persistSidebarWidth(w: number) {
 }
 
 export function AppShell({ children }: AppShellProps) {
+  const { theme } = useThemePreference();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
   const sidebarWidthRef = useRef(sidebarWidth);
@@ -95,7 +97,7 @@ export function AppShell({ children }: AppShellProps) {
   useDataBridgeVersion();
 
   // Live cache invalidation via SSE (`/api/stream`). Mutations also invalidate queries explicitly.
-  useEventStream(true);
+  const realtimeStatus = useEventStream({ enabled: true });
 
   return (
     <div className="flex h-screen overflow-hidden bg-background">
@@ -135,11 +137,11 @@ export function AppShell({ children }: AppShellProps) {
       </div>
 
       <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
-        <Header onMenuClick={() => setSidebarOpen((v) => !v)} />
+        <Header onMenuClick={() => setSidebarOpen((v) => !v)} realtimeStatus={realtimeStatus} />
         <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">{children}</main>
       </div>
 
-      <Toaster theme="dark" position="bottom-right" richColors />
+      <Toaster theme={theme} position="bottom-right" richColors />
     </div>
   );
 }

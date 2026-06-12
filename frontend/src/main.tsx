@@ -2,9 +2,10 @@ import { createRoot } from "react-dom/client";
 
 import "@fontsource-variable/inter";
 import App from "./App";
+import { initializeThemePreference } from "@/contexts/ThemeContext";
 import "./index.css";
 
-document.documentElement.classList.add("dark");
+initializeThemePreference();
 
 const container = document.getElementById("root");
 if (!container) {

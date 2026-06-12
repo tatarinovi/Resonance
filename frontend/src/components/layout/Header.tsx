@@ -1,14 +1,23 @@
 ﻿import { useState } from "react";
 import { useLocation as useWouterLocation, Link } from "@/lib/router";
 import { useLocation as useRouterLocation } from "react-router-dom";
-import { Search, ChevronRight, Menu, X } from "lucide-react";
+import { Search, ChevronRight, LogOut, Menu, Settings, User, X } from "lucide-react";
 import { NotificationBell } from "@/components/shared/NotificationCenter";
 import { RoleSwitcher } from "@/components/shared/RoleSwitcher";
-import { UserAvatar } from "@/components/shared/UserAvatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
 import { questions } from "@/data/questions";
 import { epics } from "@/data/epics";
 import { projects } from "@/data/projects";
+import type { RealtimeStatus } from "@/lib/useEventStream";
 
 const routeLabels: Record<string, string> = {
   "/": "Рабочий стол",
@@ -122,10 +131,62 @@ function Breadcrumb() {
 
 interface HeaderProps {
   onMenuClick: () => void;
+  realtimeStatus: RealtimeStatus;
 }
 
-export function Header({ onMenuClick }: HeaderProps) {
+const REALTIME_STATUS_META: Record<RealtimeStatus, { ariaLabel: string; dotClassName: string; showLiveLabel: boolean }> = {
+  online: {
+    ariaLabel: "Realtime подключен",
+    dotClassName: "bg-emerald-400 shadow-[0_0_0_3px_rgba(52,211,153,0.14)]",
+    showLiveLabel: true,
+  },
+  connecting: {
+    ariaLabel: "Подключение к realtime",
+    dotClassName: "bg-amber-400 animate-pulse shadow-[0_0_0_3px_rgba(251,191,36,0.14)]",
+    showLiveLabel: false,
+  },
+  reconnecting: {
+    ariaLabel: "Realtime переподключается",
+    dotClassName: "bg-amber-400 animate-pulse shadow-[0_0_0_3px_rgba(251,191,36,0.14)]",
+    showLiveLabel: false,
+  },
+  offline: {
+    ariaLabel: "Realtime не используется",
+    dotClassName: "bg-muted-foreground/50",
+    showLiveLabel: false,
+  },
+};
+
+export function RealtimeStatusIndicator({ status }: { status: RealtimeStatus }) {
+  const meta = REALTIME_STATUS_META[status];
+
+  return (
+    <TooltipProvider delayDuration={250}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <div
+            data-testid="realtime-status"
+            aria-label={meta.ariaLabel}
+            title={meta.ariaLabel}
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-1.5 text-xs font-medium text-muted-foreground"
+            role="status"
+            tabIndex={0}
+          >
+            <span className={`h-2 w-2 rounded-full ${meta.dotClassName}`} aria-hidden="true" />
+            {meta.showLiveLabel && <span className="hidden md:inline text-emerald-700 dark:text-emerald-300">Live</span>}
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" align="end">
+          {meta.ariaLabel}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
+
+export function Header({ onMenuClick, realtimeStatus }: HeaderProps) {
   const { currentUser } = useRole();
+  const { logout } = useAuth();
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [, setLocation] = useWouterLocation();
@@ -147,6 +208,11 @@ export function Header({ onMenuClick }: HeaderProps) {
     setSearch("");
     setSearchOpen(false);
     setLocation(item.type === "q" ? `/questions/${item.id}` : `/epics/${item.id}`);
+  };
+
+  const handleLogout = () => {
+    logout();
+    setLocation("/login", { replace: true });
   };
 
   return (
@@ -238,7 +304,42 @@ export function Header({ onMenuClick }: HeaderProps) {
           <RoleSwitcher />
         </div>
         <NotificationBell />
-        <UserAvatar userId={currentUser.id} size="sm" tooltipAlign="end" tooltipSide="bottom" href="/profile" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-primary-foreground outline-none ring-offset-background transition-opacity hover:opacity-90 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              aria-label="Открыть меню профиля"
+              data-testid="button-profile-menu"
+            >
+              {currentUser.avatarInitials || currentUser.name?.slice(0, 1) || "?"}
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" sideOffset={8} className="w-56">
+            <div className="flex items-center justify-between gap-2 px-2 py-2">
+              <div className="min-w-0 truncate text-sm font-semibold text-popover-foreground">{currentUser.name}</div>
+              <RealtimeStatusIndicator status={realtimeStatus} />
+            </div>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/profile" className="cursor-pointer">
+                <User size={14} />
+                Профиль
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/settings" className="cursor-pointer">
+                <Settings size={14} />
+                Настройки
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem className="cursor-pointer text-destructive focus:text-destructive" onSelect={handleLogout}>
+              <LogOut size={14} />
+              Выйти
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

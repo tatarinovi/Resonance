@@ -12,7 +12,7 @@ export function Avatar({ initials, color, size = 22, title }: { initials: string
       style={{
         background: color + "30",
         color,
-        borderColor: "#0D1117",
+        borderColor: "var(--kanban-surface)",
         width: size,
         height: size,
         fontSize: size * 0.41,
@@ -25,7 +25,7 @@ export function Avatar({ initials, color, size = 22, title }: { initials: string
       data-testid={`img-avatar-${initials}`}
     >
       {initials}
-      <span className="pointer-events-none absolute left-1/2 top-0 z-50 -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-nowrap rounded-md border border-[#30363d] bg-[#161b22] px-2 py-1 text-[11px] font-medium text-[#E6EEF4] opacity-0 shadow-lg transition-opacity duration-150 group-hover/avatar:opacity-100 group-focus-within/avatar:opacity-100">
+      <span className="pointer-events-none absolute left-1/2 top-0 z-50 -translate-x-1/2 -translate-y-[calc(100%+8px)] whitespace-nowrap rounded-md border border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] px-2 py-1 text-[11px] font-medium text-[var(--kanban-text)] opacity-0 shadow-lg transition-opacity duration-150 group-hover/avatar:opacity-100 group-focus-within/avatar:opacity-100">
         {tooltip}
       </span>
     </div>
@@ -64,8 +64,8 @@ export function Toggle({ label, on, onToggle }: { label: string; on: boolean; on
           width: 28,
           height: 16,
           borderRadius: 8,
-          border: `1px solid ${on ? "#8b5cf6" : "#2F363C"}`,
-          background: on ? "rgba(139,92,246,0.25)" : "#161b22",
+          border: `1px solid ${on ? "var(--kanban-accent)" : "var(--kanban-border)"}`,
+          background: on ? "rgba(139,92,246,0.25)" : "var(--kanban-surface-2)",
           position: "relative",
           flexShrink: 0,
           transition: "all 0.15s",
@@ -79,12 +79,12 @@ export function Toggle({ label, on, onToggle }: { label: string; on: boolean; on
             position: "absolute",
             top: 2,
             left: on ? 14 : 2,
-            background: on ? "#8b5cf6" : "#444d56",
+            background: on ? "var(--kanban-accent)" : "var(--kanban-text-faint)",
             transition: "all 0.15s",
           }}
         />
       </div>
-      <span style={{ fontSize: 12, color: on ? "#E6EEF4" : "#8b949e" }}>{label}</span>
+      <span style={{ fontSize: 12, color: on ? "var(--kanban-text)" : "var(--kanban-text-muted)" }}>{label}</span>
     </div>
   );
 }
@@ -106,7 +106,7 @@ export function MSelect({
     <div className="mfield" data-testid={`select-${label}`}>
       <label className="mfield-label">
         {label}
-        {required && <span style={{ color: "#f85149", marginLeft: 2 }}>*</span>}
+        {required && <span style={{ color: "var(--kanban-danger)", marginLeft: 2 }}>*</span>}
       </label>
       <div style={{ position: "relative" }}>
         <select
@@ -128,7 +128,7 @@ export function MSelect({
             right: 10,
             top: "50%",
             transform: "translateY(-50%)",
-            color: "#8b949e",
+            color: "var(--kanban-text-muted)",
             pointerEvents: "none",
           }}
         />
@@ -156,7 +156,7 @@ export function MInput({
     <div className="mfield" data-testid={`input-group-${label}`}>
       <label className="mfield-label">
         {label}
-        {required && <span style={{ color: "#f85149", marginLeft: 2 }}>*</span>}
+        {required && <span style={{ color: "var(--kanban-danger)", marginLeft: 2 }}>*</span>}
       </label>
       <input
         className="mfield-input"
@@ -180,9 +180,9 @@ export function FilterDropdown({
   searchPlaceholder = "Поиск",
   emptySearchMessage = "Никого не найдено",
   emptyOptionsMessage,
-  /** Если задан — фильтрация опций по строке поиска (например, поиск по id эпика). */
+  /** Если задан - фильтрация опций по строке поиска (например, поиск по id эпика). */
   matchOption,
-  /** Стабильный ключ React для опции (по умолчанию — сама строка опции). */
+  /** Стабильный ключ React для опции (по умолчанию - сама строка опции). */
   getOptionReactKey,
 }: {
   label: string;
@@ -234,14 +234,14 @@ export function FilterDropdown({
         type="button"
         className="toolbar-btn"
         onClick={() => setOpen((o) => !o)}
-        style={activeCount > 0 ? { borderColor: "#8b5cf6", color: "#a78bfa", background: "#8b5cf610" } : {}}
+        style={activeCount > 0 ? { borderColor: "var(--kanban-accent)", color: "var(--kanban-accent-emphasis)", background: "var(--kanban-accent-soft)" } : {}}
         data-testid={`button-toggle-${label}`}
       >
         <Icon size={12} /> {label}
         {activeCount > 0 && (
           <span
             style={{
-              background: "#8b5cf6",
+              background: "var(--kanban-accent)",
               color: "#fff",
               borderRadius: 10,
               padding: "0 5px",
@@ -264,8 +264,8 @@ export function FilterDropdown({
             top: "calc(100% + 4px)",
             left: 0,
             zIndex: 200,
-            background: "#161b22",
-            border: "1px solid #2F363C",
+            background: "var(--kanban-surface-2)",
+            border: "1px solid var(--kanban-border)",
             borderRadius: 4,
             minWidth: 200,
             boxShadow: "0 8px 24px rgba(0,0,0,0.5)",
@@ -273,7 +273,7 @@ export function FilterDropdown({
           data-testid={`menu-${label}`}
         >
           {searchable && (
-            <div style={{ padding: "8px 10px", borderBottom: "1px solid #2F363C" }}>
+            <div style={{ padding: "8px 10px", borderBottom: "1px solid var(--kanban-border)" }}>
               <input
                 type="search"
                 className="mfield-input"
@@ -289,7 +289,7 @@ export function FilterDropdown({
           )}
           {options.length === 0 ? (
             emptyOptionsMessage ? (
-              <div style={{ padding: "10px 12px", fontSize: 12, color: "#8b949e" }}>{emptyOptionsMessage}</div>
+              <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--kanban-text-muted)" }}>{emptyOptionsMessage}</div>
             ) : null
           ) : (
             <>
@@ -312,16 +312,16 @@ export function FilterDropdown({
                     padding: "7px 12px",
                     cursor: "pointer",
                     fontSize: 13,
-                    color: selected.includes(opt) ? "#E6EEF4" : "#8b949e",
-                    background: selected.includes(opt) ? "#8b5cf610" : "transparent",
+                    color: selected.includes(opt) ? "var(--kanban-text)" : "var(--kanban-text-muted)",
+                    background: selected.includes(opt) ? "var(--kanban-accent-soft)" : "transparent",
                     transition: "all 0.1s",
                   }}
                   onMouseEnter={(e) => {
-                    if (!selected.includes(opt)) (e.currentTarget as HTMLDivElement).style.background = "#21262d";
+                    if (!selected.includes(opt)) (e.currentTarget as HTMLDivElement).style.background = "var(--kanban-hover)";
                   }}
                   onMouseLeave={(e) => {
                     (e.currentTarget as HTMLDivElement).style.background = selected.includes(opt)
-                      ? "#8b5cf610"
+                      ? "var(--kanban-accent-soft)"
                       : "transparent";
                   }}
                   data-testid={`option-${opt}`}
@@ -331,8 +331,8 @@ export function FilterDropdown({
                       width: 14,
                       height: 14,
                       borderRadius: 2,
-                      border: `1px solid ${selected.includes(opt) ? "#8b5cf6" : "#2F363C"}`,
-                      background: selected.includes(opt) ? "#8b5cf6" : "transparent",
+                      border: `1px solid ${selected.includes(opt) ? "var(--kanban-accent)" : "var(--kanban-border)"}`,
+                      background: selected.includes(opt) ? "var(--kanban-accent)" : "transparent",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -345,12 +345,12 @@ export function FilterDropdown({
                 </div>
               ))}
               {searchable && visibleOptions.length === 0 && (
-                <div style={{ padding: "10px 12px", fontSize: 12, color: "#8b949e" }}>{emptySearchMessage}</div>
+                <div style={{ padding: "10px 12px", fontSize: 12, color: "var(--kanban-text-muted)" }}>{emptySearchMessage}</div>
               )}
             </>
           )}
           {selected.length > 0 && (
-            <div style={{ padding: "6px 12px", borderTop: "1px solid #2F363C" }}>
+            <div style={{ padding: "6px 12px", borderTop: "1px solid var(--kanban-border)" }}>
               <button
                 type="button"
                 onClick={() => {
@@ -359,7 +359,7 @@ export function FilterDropdown({
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#f85149",
+                  color: "var(--kanban-danger)",
                   fontSize: 12,
                   cursor: "pointer",
                   padding: 0,

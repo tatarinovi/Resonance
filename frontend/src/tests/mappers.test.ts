@@ -5,12 +5,13 @@ import {
   QA_STATUS_FROM_REF,
   STATUS_FROM_REF,
   epicIdToRef,
+  mapActivity,
   mapApiTicketToRefQuestion,
   refIdToNumeric,
   ticketIdToRef,
   userIdToRef,
 } from "@/lib/mappers";
-import type { ApiTicket } from "@/lib/types";
+import type { ApiActivityEvent, ApiTicket } from "@/lib/types";
 
 describe("id helpers", () => {
   it("round-trips numeric IDs", () => {
@@ -98,5 +99,24 @@ describe("mapApiTicketToRefQuestion", () => {
     expect(ref.attachments[0].url).toBe("https://example.com/spec.pdf");
     expect(ref.attachments[0].mimeType).toBe("application/pdf");
     expect(ref.attachments[0].type).toBe("pdf");
+  });
+});
+
+describe("mapActivity", () => {
+  it("translates backend question statuses in activity actions", () => {
+    const event: ApiActivityEvent = {
+      id: "te-1",
+      type: "status",
+      user_id: 7,
+      username: "admin",
+      action: "изменил статус → forwarded",
+      target_id: 5,
+      target_type: "question",
+      target_title: "Test question",
+      project_id: 1,
+      date: "2025-01-01T10:00:00Z",
+    };
+
+    expect(mapActivity(event).action).toBe("изменил статус → У эксперта");
   });
 });

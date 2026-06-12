@@ -198,7 +198,7 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
       if (!epicRow || epicRow.id === t.id) return t;
       if (t.epicRefIsParentLink && !kanbanTaskRowIsEpicType(epicRow)) return t;
       const name = epicRow.title.trim() || `Задача #${eid}`;
-      const short = name.length > 32 ? `${name.slice(0, 29)}…` : name;
+      const short = name.length > 32 ? `${name.slice(0, 29)}...` : name;
       return { ...t, epic: short, epicFull: name, epicRefIsParentLink: undefined };
     });
   }, [bundle.data?.tasks, columns, priorityRefs, memberIdToName, taskTypeRefs, componentIdToName]);
@@ -296,7 +296,7 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
 
   const selectedEpicIdSet = useMemo(() => new Set(selectedEpicIds), [selectedEpicIds]);
 
-  /** Общие фильтры доски; фильтр по эпикам только в режиме «Доска». */
+  /** Общие фильтры доски; фильтр по эпикам только в режиме "Доска". */
   const baseFilteredTasks = useMemo(() => {
     return boardTasks.filter((task) => {
       if (searchQuery && !task.title.toLowerCase().includes(searchQuery.toLowerCase())) return false;
@@ -415,15 +415,15 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
       <div
         style={{
           padding: "12px 20px 0",
-          borderBottom: "1px solid #2F363C",
+          borderBottom: "1px solid var(--kanban-border)",
           display: "flex",
           alignItems: "flex-end",
           justifyContent: "space-between",
-          background: "#0D1117",
+          background: "var(--kanban-surface)",
         }}
       >
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 600, color: "#E6EEF4", marginBottom: 2 }}>{projectTitle}</h1>
+          <h1 style={{ fontSize: 20, fontWeight: 600, color: "var(--kanban-text)", marginBottom: 2 }}>{projectTitle}</h1>
           <div style={{ display: "flex", gap: 0, marginTop: 8 }}>
             {(["Доска", "Список"] as const).map((tab, i) => {
               const mode = i === 0 ? "board" : "list";
@@ -447,10 +447,10 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
                     padding: "6px 14px",
                     fontSize: 13,
                     cursor: "pointer",
-                    color: active ? "#E6EEF4" : "#8b949e",
+                    color: active ? "var(--kanban-text)" : "var(--kanban-text-muted)",
                     background: "transparent",
                     border: "none",
-                    borderBottom: active ? "2px solid #8b5cf6" : "2px solid transparent",
+                    borderBottom: active ? "2px solid var(--kanban-accent)" : "2px solid transparent",
                     fontFamily: "inherit",
                   }}
                   data-testid={i === 0 ? "tab-kanban-board" : "tab-kanban-list"}
@@ -468,7 +468,7 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
               target="_blank"
               rel="noreferrer"
               title="Открыть в Kanban"
-              style={{ color: "#8b5cf6", display: "flex", alignItems: "center" }}
+              style={{ color: "var(--kanban-accent)", display: "flex", alignItems: "center" }}
               data-testid="kanban-board-open-external"
             >
               <Link2 size={18} />
@@ -482,12 +482,12 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
 
       <div className="kanban-toolbar shrink-0" style={{ flexWrap: "wrap", height: "auto", minHeight: 44, paddingTop: 6, paddingBottom: 6 }}>
         <div style={{ position: "relative" }}>
-          <Search size={12} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "#444d56" }} />
+          <Search size={12} style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "var(--kanban-text-faint)" }} />
           <input
             style={{
-              background: "#161b22",
-              border: `1px solid ${searchQuery ? "#8b5cf6" : "#2F363C"}`,
-              color: "#E6EEF4",
+              background: "var(--kanban-surface-2)",
+              border: `1px solid ${searchQuery ? "var(--kanban-accent)" : "var(--kanban-border)"}`,
+              color: "var(--kanban-text)",
               fontSize: 12,
               padding: "4px 8px 4px 26px",
               borderRadius: 4,
@@ -511,7 +511,7 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
                 transform: "translateY(-50%)",
                 background: "none",
                 border: "none",
-                color: "#444d56",
+                color: "var(--kanban-text-faint)",
                 cursor: "pointer",
                 padding: 0,
               }}
@@ -540,7 +540,7 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
             searchPlaceholder="Поиск по эпику"
             emptySearchMessage="Ничего не найдено"
             emptyOptionsMessage={
-              epicsCatalogQ.isLoading ? "Загрузка эпиков…" : "Нет эпиков в этом проекте"
+              epicsCatalogQ.isLoading ? "Загрузка эпиков..." : "Нет эпиков в этом проекте"
             }
             matchOption={epicFilterMatchOption}
             getOptionReactKey={epicFilterGetKey}
@@ -571,19 +571,19 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
           />
         ) : null}
 
-        <div style={{ width: 1, height: 20, background: "#2F363C", margin: "0 4px" }} />
+        <div style={{ width: 1, height: 20, background: "var(--kanban-border)", margin: "0 4px" }} />
 
         <label className="toolbar-toggle" onClick={() => setOnlyMine(!onlyMine)} style={{ cursor: "pointer" }} data-testid="toggle-only-mine">
           <div className={`toggle-track${onlyMine ? " on" : ""}`}>
             <div className="toggle-thumb" />
           </div>
-          <span style={{ color: onlyMine ? "#E6EEF4" : "#8b949e" }}>Только мои</span>
+          <span style={{ color: onlyMine ? "var(--kanban-text)" : "var(--kanban-text-muted)" }}>Только мои</span>
         </label>
         <label className="toolbar-toggle" onClick={() => setOnlyImportant(!onlyImportant)} style={{ cursor: "pointer" }} data-testid="toggle-only-important">
           <div className={`toggle-track${onlyImportant ? " on" : ""}`}>
             <div className="toggle-thumb" />
           </div>
-          <span style={{ color: onlyImportant ? "#E6EEF4" : "#8b949e" }}>Только важные задачи</span>
+          <span style={{ color: onlyImportant ? "var(--kanban-text)" : "var(--kanban-text-muted)" }}>Только важные задачи</span>
         </label>
 
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -608,7 +608,7 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
             </>
           ) : null}
           {viewMode === "list" && listEpicGroupCount > 0 && hasFilters ? (
-            <div style={{ width: 1, height: 16, background: "#2F363C", flexShrink: 0 }} aria-hidden />
+            <div style={{ width: 1, height: 16, background: "var(--kanban-border)", flexShrink: 0 }} aria-hidden />
           ) : null}
           {hasFilters && (
             <button
@@ -625,7 +625,7 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
               style={{
                 background: "none",
                 border: "none",
-                color: "#f85149",
+                color: "var(--kanban-danger)",
                 fontSize: 12,
                 cursor: "pointer",
                 fontFamily: "inherit",
@@ -643,14 +643,14 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
       </div>
 
       {bundle.isError && (
-        <div style={{ padding: 16, color: "#f85149", fontSize: 13 }}>
+        <div style={{ padding: 16, color: "var(--kanban-danger)", fontSize: 13 }}>
           Не удалось загрузить доску. Проверьте подключение Kanban.
         </div>
       )}
 
       <div
         className={cn(
-          "kanban-scroll flex-1 min-h-0 bg-[#0a0d14] p-3",
+          "kanban-scroll flex-1 min-h-0 bg-[var(--kanban-bg)] p-3",
           viewMode === "board" ? "flex gap-2 overflow-x-auto overflow-y-hidden" : "flex flex-col overflow-x-hidden overflow-y-auto",
         )}
       >
@@ -690,8 +690,8 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
 
       {isLoadingCols && !bundle.isError && (
         <div className="kanban-preloader" data-testid="kanban-board-preloader">
-          <Loader2 className="h-9 w-9 animate-spin text-[#8b5cf6]" aria-hidden />
-          <p className="kanban-preloader-text">Загрузка доски…</p>
+          <Loader2 className="h-9 w-9 animate-spin text-[var(--kanban-accent)]" aria-hidden />
+          <p className="kanban-preloader-text">Загрузка доски...</p>
         </div>
       )}
     </div>
@@ -706,11 +706,11 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
           </ResizablePanel>
           {panelOpen && (
             <>
-              <ResizableHandle withHandle className="w-2 shrink-0 bg-[#2F363C] hover:bg-[#444d56]" />
+              <ResizableHandle withHandle className="w-2 shrink-0 bg-[var(--kanban-border)] hover:bg-[var(--kanban-text-faint)]" />
               <ResizablePanel defaultSize={38} minSize={28} maxSize={58} className="flex min-h-0 min-w-0 flex-col">
                 <motion.aside
                   key={detailTask ? `task-${detailTask.id}` : "create"}
-                  className="kanban-board-aside flex h-full min-h-0 flex-col border-l border-[#2F363C]"
+                  className="kanban-board-aside flex h-full min-h-0 flex-col border-l border-[var(--kanban-border)]"
                   initial={reduceMotion ? false : { opacity: 0, x: 20 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={
@@ -756,7 +756,7 @@ export function KanbanBoardView({ projectSlug, projectTitle }: { projectSlug: st
           <Sheet open={panelOpen} onOpenChange={(open) => !open && closePanels()}>
             <SheetContent
               side="right"
-              className="flex h-full max-h-[100dvh] w-full flex-col gap-0 overflow-hidden border-[#2F363C] bg-[#0D1117] p-0 sm:max-w-[min(640px,96vw)]"
+              className="flex h-full max-h-[100dvh] w-full flex-col gap-0 overflow-hidden border-[var(--kanban-border)] bg-[var(--kanban-surface)] p-0 sm:max-w-[min(640px,96vw)]"
             >
               <motion.div
                 key={detailTask ? `task-${detailTask.id}` : "create"}

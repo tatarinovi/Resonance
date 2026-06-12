@@ -295,15 +295,15 @@ export function QaTaskBulkCreateDialog({
     <div
       key={row.key}
       className={cn(
-        "rounded-md border bg-[#0D1117] p-3",
-        row.duplicateTask ? "border-amber-400/40" : "border-[#2F363C]",
+        "rounded-md border bg-[var(--kanban-surface)] p-3",
+        row.duplicateTask ? "border-amber-400/40" : "border-[var(--kanban-border)]",
       )}
       data-testid={`qa-task-row-${row.kind}`}
     >
       <div className="flex items-start gap-3">
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-semibold text-[#E6EEF4]">{QA_BULK_TASK_LABELS[row.kind]}</div>
-          <div className="mt-1 break-words text-[12px] leading-snug text-[#8b949e]">{row.title}</div>
+          <div className="text-[13px] font-semibold text-[var(--kanban-text)]">{QA_BULK_TASK_LABELS[row.kind]}</div>
+          <div className="mt-1 break-words text-[12px] leading-snug text-[var(--kanban-text-muted)]">{row.title}</div>
           <div className="mt-2 min-h-4">{renderStatus(row)}</div>
         </div>
         {removable}
@@ -318,10 +318,10 @@ export function QaTaskBulkCreateDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[min(92vh,780px)] max-w-3xl overflow-y-auto border-[#2F363C] bg-[#161b22] p-0 text-[#E6EEF4]">
-        <DialogHeader className="border-b border-[#2F363C] px-5 py-4">
+      <DialogContent className="max-h-[min(92vh,780px)] max-w-3xl overflow-y-auto border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] p-0 text-[var(--kanban-text)]">
+        <DialogHeader className="border-b border-[var(--kanban-border)] px-5 py-4">
           <DialogTitle>Создать задачи для QA</DialogTitle>
-          <DialogDescription className="text-[#8b949e]">
+          <DialogDescription className="text-[var(--kanban-text-muted)]">
             Эпик #{epic.id}: {epic.title}
           </DialogDescription>
         </DialogHeader>
@@ -346,7 +346,7 @@ export function QaTaskBulkCreateDialog({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <div className="text-[12px] font-semibold uppercase text-[#8b949e]">Тестирование</div>
+              <div className="text-[12px] font-semibold uppercase text-[var(--kanban-text-muted)]">Тестирование</div>
               <button type="button" className="btn-secondary text-[12px]" onClick={addTestingRow} disabled={submitting} data-testid="button-add-qa-testing-row">
                 <Plus size={13} /> Добавить
               </button>
@@ -365,7 +365,7 @@ export function QaTaskBulkCreateDialog({
                 testingRows.length > 1 ? (
                   <button
                     type="button"
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[#2F363C] text-[#8b949e] hover:border-red-400/50 hover:text-red-300"
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[var(--kanban-border)] text-[var(--kanban-text-muted)] hover:border-red-400/50 hover:text-red-300"
                     onClick={() => removeTestingRow(testingRow.id)}
                     disabled={submitting}
                     aria-label="Удалить задачу тестирования"
@@ -379,11 +379,11 @@ export function QaTaskBulkCreateDialog({
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="flex items-center gap-2 text-[13px] text-[#E6EEF4]">
+            <label className="flex items-center gap-2 text-[13px] text-[var(--kanban-text)]">
               <input type="checkbox" checked={demoEnabled} onChange={(e) => setDemoEnabled(e.target.checked)} disabled={submitting} data-testid="checkbox-qa-demo" />
               Проведение демонстрации
             </label>
-            <label className="flex items-center gap-2 text-[13px] text-[#E6EEF4]">
+            <label className="flex items-center gap-2 text-[13px] text-[var(--kanban-text)]">
               <input type="checkbox" checked={instructionEnabled} onChange={(e) => setInstructionEnabled(e.target.checked)} disabled={submitting} data-testid="checkbox-qa-instruction" />
               Написание инструкции
             </label>
@@ -409,7 +409,7 @@ export function QaTaskBulkCreateDialog({
             : null}
         </div>
 
-        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-[#2F363C] px-5 py-4">
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-[var(--kanban-border)] px-5 py-4">
           <button type="button" className="btn-cancel" onClick={() => onOpenChange(false)} disabled={submitting}>
             Отмена
           </button>

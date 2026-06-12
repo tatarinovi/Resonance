@@ -6,7 +6,7 @@ import type { KanbanColumn, KanbanTask } from "@/lib/kanban-ds/types";
 import { PRIORITY_CLASS, TYPE_CLASS } from "@/components/kanban-board/avatars";
 
 function columnStatusBadgeStyle(hex: string): CSSProperties {
-  const c = hex.trim() || "#8b949e";
+  const c = hex.trim() || "var(--kanban-text-muted)";
   return {
     background: `${c}1f`,
     color: c,
@@ -162,7 +162,7 @@ export const KanbanListView = forwardRef<
   const renderTaskRow = (t: KanbanTask) => {
     const col = columnById.get(t.columnId);
     const statusLabel = col?.title ?? t.status;
-    const statusColor = col?.color ?? "#8b949e";
+    const statusColor = col?.color ?? "var(--kanban-text-muted)";
     const deadlineLine = formatKanbanDeadlineListCell(t.deadline, t.deadlineStatus);
     const deadlineOver = Number(t.deadlineStatus) === 2;
     return (
@@ -213,7 +213,7 @@ export const KanbanListView = forwardRef<
   };
 
   return (
-    <div className="kanban-list-root kanban-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-[#0a0d14] p-3">
+    <div className="kanban-list-root kanban-scroll flex-1 min-h-0 overflow-y-auto overflow-x-hidden bg-[var(--kanban-bg)] p-3">
       {epicGroups.map(([key, { title, tasks: groupTasks }]) => {
         const open = !collapsed.has(key);
         const sorted = [...groupTasks].sort((a, b) => a.title.localeCompare(b.title, "ru"));
@@ -221,22 +221,22 @@ export const KanbanListView = forwardRef<
         const epicIdFromKey = key.startsWith("id:") ? Number(key.slice(3)) : NaN;
         const showEpicId = Number.isFinite(epicIdFromKey) && epicIdFromKey > 0;
         return (
-          <section key={key} className="kanban-list-epic mb-2 rounded-md border border-[#2F363C] bg-[#0D1117]">
+          <section key={key} className="kanban-list-epic mb-2 rounded-md border border-[var(--kanban-border)] bg-[var(--kanban-surface)]">
             <div className="kanban-list-epic-head-wrap">
               <button type="button" className="kanban-list-epic-head-main" onClick={() => toggle(key)} data-testid={`kanban-list-epic-toggle-${key}`}>
                 <div className="kanban-list-epic-head-row">
                   <ChevronRight
                     size={16}
-                    className="kanban-list-epic-chevron shrink-0 text-[#8b949e]"
+                    className="kanban-list-epic-chevron shrink-0 text-[var(--kanban-text-muted)]"
                     style={{ transform: open ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}
                   />
                   <span className="kanban-list-epic-title min-w-0 truncate">
                     {showEpicId ? (
                       <>
-                        <span className="font-mono text-[#6e7681]" data-testid={`kanban-list-epic-id-${epicIdFromKey}`}>
+                        <span className="font-mono text-[var(--kanban-text-faint)]" data-testid={`kanban-list-epic-id-${epicIdFromKey}`}>
                           Эпик #{epicIdFromKey}
                         </span>
-                        <span className="text-[#444d56]"> · </span>
+                        <span className="text-[var(--kanban-text-faint)]"> · </span>
                       </>
                     ) : null}
                     {title}
@@ -272,7 +272,7 @@ export const KanbanListView = forwardRef<
         );
       })}
 
-      <section className="kanban-list-epic rounded-md border border-[#2F363C] bg-[#0D1117]">
+      <section className="kanban-list-epic rounded-md border border-[var(--kanban-border)] bg-[var(--kanban-surface)]">
         <div className="kanban-list-epic-head kanban-list-epic-head-static">
           <span className="kanban-list-epic-title">Без эпика</span>
           <span className="kanban-list-epic-count">{noEpicTasks.length}</span>

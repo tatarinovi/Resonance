@@ -124,13 +124,13 @@ export function KanbanColumn({
               display: "inline-block",
             }}
           />
-          <span style={{ fontWeight: 500, color: "#E6EEF4", fontSize: 13 }} data-testid={`text-column-title-${col.id}`}>
+          <span style={{ fontWeight: 500, color: "var(--kanban-text)", fontSize: 13 }} data-testid={`text-column-title-${col.id}`}>
             {col.title}
           </span>
           <span
             style={{
-              background: "#21262d",
-              color: "#8b949e",
+              background: "var(--kanban-hover)",
+              color: "var(--kanban-text-muted)",
               fontSize: 11,
               padding: "2px 6px",
               borderRadius: 10,
@@ -147,7 +147,7 @@ export function KanbanColumn({
             style={{
               background: "none",
               border: "none",
-              color: "#444d56",
+              color: "var(--kanban-text-faint)",
               cursor: "pointer",
               padding: 4,
               display: "flex",
@@ -181,14 +181,14 @@ export function KanbanColumn({
           </div>
         )}
         {showQuick && (
-          <div style={{ margin: "6px 6px 0", background: "#0D1117", border: "1px solid #8b5cf6", borderRadius: 4 }}>
+          <div style={{ margin: "6px 6px 0", background: "var(--kanban-surface)", border: "1px solid var(--kanban-accent)", borderRadius: 4 }}>
             <input
               ref={inputRef}
               style={{
                 width: "100%",
                 background: "transparent",
                 border: "none",
-                color: "#E6EEF4",
+                color: "var(--kanban-text)",
                 padding: "8px 10px",
                 fontSize: 13,
                 outline: "none",

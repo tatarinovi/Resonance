@@ -62,7 +62,7 @@ export default function ProjectsPage() {
                   <h3 className="text-sm font-semibold text-foreground">{p.name}</h3>
                 </div>
                 <span
-                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${p.status === "Активен" ? "bg-emerald-500/15 text-emerald-400" : "bg-slate-500/15 text-slate-400"}`}
+                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${p.status === "Активен" ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-slate-500/15 text-slate-600 dark:text-slate-400"}`}
                 >
                   {p.status}
                 </span>

@@ -7,6 +7,7 @@ import { ShellLayoutGate } from "@/components/layout/ShellLayoutGate";
 import { AdminDashboardPersonaProvider } from "@/contexts/AdminDashboardPersonaContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { DataBridge } from "@/contexts/DataBridge";
+import { ThemePreferenceProvider } from "@/contexts/ThemeContext";
 
 import ActivityPage from "@/pages/ActivityPage";
 import DashboardPage from "@/pages/DashboardPage";
@@ -59,10 +60,11 @@ function ShellRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <AuthProvider>
-          <BrowserRouter>
-            <Routes>
+      <ThemePreferenceProvider>
+        <TooltipProvider>
+          <AuthProvider>
+            <BrowserRouter>
+              <Routes>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
 
@@ -184,10 +186,11 @@ export default function App() {
 
               <Route path="*" element={<NotFound />} />
               <Route path="" element={<Navigate to="/" replace />} />
-            </Routes>
-          </BrowserRouter>
-        </AuthProvider>
-      </TooltipProvider>
+              </Routes>
+            </BrowserRouter>
+          </AuthProvider>
+        </TooltipProvider>
+      </ThemePreferenceProvider>
     </QueryClientProvider>
   );
 }

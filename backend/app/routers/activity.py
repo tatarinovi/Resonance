@@ -40,10 +40,31 @@ from .epics import _epic_read, _epic_query
 router = APIRouter(tags=["activity"])
 
 
+TICKET_STATUS_LABELS = {
+    "pending_approval": "На проверке",
+    "forwarded": "У эксперта",
+    "returned": "На уточнении",
+    "answered": "Ожидает автора",
+    "closed": "Закрыт",
+    "cancelled": "Отменён",
+}
+
+QA_STATUS_LABELS = {
+    "draft": "Подготовка тест-плана",
+    "in_testing": "В тестировании",
+    "blocked": "Заблокировано",
+    "test_complete": "TEST complete",
+    "stage_complete": "STAGE complete",
+    "prod_complete": "PROD complete",
+    "closed": "Закрыто",
+}
+
+
 def _ticket_event_to_activity(event: TicketEvent, ticket: Ticket) -> ActivityEventRead:
+    new_status = TICKET_STATUS_LABELS.get(event.new_value or "", event.new_value or "")
     action_label_map = {
         "created": "создал вопрос",
-        "status_changed": f"изменил статус → {event.new_value}",
+        "status_changed": f"изменил статус → {new_status}",
         "assignee_changed": "назначил исполнителя",
         "priority_changed": "изменил приоритет",
         "description_changed": "изменил описание",
@@ -58,17 +79,18 @@ def _ticket_event_to_activity(event: TicketEvent, ticket: Ticket) -> ActivityEve
         action=action_label_map.get(event.kind, event.kind),
         target_id=event.ticket_id,
         target_type="question",
-        target_title=ticket.title or (ticket.data_json or {}).get("title") or f"Тикет #{ticket.id}",
+        target_title=ticket.title or (ticket.data_json or {}).get("title") or f"Вопрос #{ticket.id}",
         project_id=ticket.project_id,
         date=event.created_at,
     )
 
 
 def _epic_audit_to_activity(audit: EpicAuditLog, epic: Epic, username: str | None) -> ActivityEventRead:
+    new_status = QA_STATUS_LABELS.get(audit.new_status or "", audit.new_status or "")
     label_map = {
         "created": "создал эпик",
         "epic_updated": "обновил эпик",
-        "qa_status_changed": f"изменил QA-статус → {audit.new_status}",
+        "qa_status_changed": f"изменил QA-статус → {new_status}",
         "qa_updated": "обновил QA-блок",
         "comment_added": "добавил комментарий в",
         "blocker_added": "добавил блокер в",

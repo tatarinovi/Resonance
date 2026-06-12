@@ -497,12 +497,60 @@ export function mapActivity(event: ApiActivityEvent): RefActivityEvent {
     id: event.id,
     type: refType,
     userId: event.user_id ? userIdToRef(event.user_id) : "U-000",
-    action: event.action,
+    action: translateActivityAction(event.action),
     targetTitle: event.target_title,
     targetId: refTargetId,
     targetType: event.target_type === "epic" ? "epic" : "question",
     date: event.date,
   };
+}
+
+const ACTIVITY_STATUS_LABELS: Record<string, string> = {
+  pending_approval: "На проверке",
+  forwarded: "У эксперта",
+  returned: "На уточнении",
+  answered: "Ожидает автора",
+  closed: "Закрыт",
+  cancelled: "Отменён",
+  draft: "Подготовка тест-плана",
+  in_testing: "В тестировании",
+  blocked: "Заблокировано",
+  test_complete: "TEST complete",
+  stage_complete: "STAGE complete",
+  prod_complete: "PROD complete",
+};
+
+const ACTIVITY_ACTION_LABELS: Record<string, string> = {
+  created: "создал вопрос",
+  status_changed: "изменил статус",
+  assignee_changed: "назначил исполнителя",
+  priority_changed: "изменил приоритет",
+  description_changed: "изменил описание",
+  message_added: "добавил сообщение в",
+  attachment_added: "добавил вложение в",
+  ticket_created: "создал вопрос",
+  ticket_forwarded: "передал эксперту",
+  ticket_answered: "получен ответ",
+  ticket_returned: "вернул на уточнение",
+  ticket_watch_status: "изменил статус вопроса",
+};
+
+function translateActivityAction(action: string): string {
+  const trimmed = action.trim();
+  const direct = ACTIVITY_ACTION_LABELS[trimmed];
+  if (direct) return direct;
+
+  let translated = trimmed
+    .replace(/\bchanged status\b/gi, "изменил статус")
+    .replace(/\bcreated question\b/gi, "создал вопрос")
+    .replace(/\badded comment\b/gi, "добавил комментарий")
+    .replace(/\badded message\b/gi, "добавил сообщение")
+    .replace(/\badded attachment\b/gi, "добавил вложение");
+
+  for (const [raw, label] of Object.entries(ACTIVITY_STATUS_LABELS)) {
+    translated = translated.replace(new RegExp(`\\b${raw}\\b`, "g"), label);
+  }
+  return translated;
 }
 
 function humanFileSize(bytes: number): string {

@@ -3,7 +3,7 @@
  * and immediately attaches them to a ticket via
  * `POST /api/tickets/{id}/attachments`.
  *
- * The component keeps a small per-upload state machine (idle → uploading →
+ * The component keeps a small per-upload state machine (idle -> uploading ->
  * done | error) and surfaces errors via `sonner` toasts.
  */
 import { useRef, useState } from "react";
@@ -97,7 +97,7 @@ export function AttachmentUploader({ ticketId, onUploaded, className, messageId 
               <span className="flex-1 truncate text-foreground/90">{item.name}</span>
               <span className="text-[10px] text-muted-foreground whitespace-nowrap">{humanSize(item.size)}</span>
               {item.state === "uploading" && <Loader2 size={12} className="animate-spin text-muted-foreground" />}
-              {item.state === "done" && <span className="text-[10px] text-emerald-400">готово</span>}
+              {item.state === "done" && <span className="text-[10px] text-emerald-700 dark:text-emerald-400">готово</span>}
               {item.state === "error" && (
                 <span title={item.error} className="text-[10px] text-destructive flex items-center gap-1">
                   <X size={10} /> ошибка

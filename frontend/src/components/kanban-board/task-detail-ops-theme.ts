@@ -25,7 +25,7 @@ function fallbackFromColumnColor(fallbackHex: string): DetailStageThemeVars {
     "--detail-stage-bg-hover": `rgba(${r},${g},${b},0.16)`,
     "--detail-stage-border": `rgba(${Math.min(255, r + 28)},${Math.min(255, g + 28)},${Math.min(255, b + 28)},0.42)`,
     "--detail-stage-border-hover": `rgba(${Math.min(255, r + 40)},${Math.min(255, g + 40)},${Math.min(255, b + 40)},0.55)`,
-    "--detail-stage-fg": "#E6EEF4",
+    "--detail-stage-fg": "var(--kanban-text)",
     "--detail-stage-accent": fallbackHex,
     "--detail-stage-chevron": "rgba(230,238,244,0.45)",
   };
@@ -78,7 +78,7 @@ export function resolveDetailStageThemeVars(stageTitle: string, columnColorFallb
       "--detail-stage-border": "rgba(163, 113, 247, 0.36)",
       "--detail-stage-border-hover": "rgba(163, 113, 247, 0.5)",
       "--detail-stage-fg": "#d4c4f5",
-      "--detail-stage-accent": "#a78bfa",
+      "--detail-stage-accent": "var(--kanban-accent-emphasis)",
       "--detail-stage-chevron": "rgba(212,196,245,0.55)",
     };
   }
@@ -124,32 +124,32 @@ export function detailPriorityPill(priority: string): PriorityPillTone {
     return {
       label: "Низкий",
       className:
-        "border border-solid border-[#3d444d] bg-[#1c2128] text-[#9da7b3] shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]",
+        "border border-solid border-slate-300 bg-slate-100 text-slate-600 dark:border-[var(--kanban-border)] dark:bg-[var(--kanban-hover)] dark:text-slate-300",
     };
   }
   if (p === "Средний") {
     return {
       label: "Средний",
       className:
-        "border border-solid border-[#6b5420]/80 bg-[#2a2312] text-[#d4a85c] shadow-[inset_0_1px_0_rgba(255,200,100,0.06)]",
+        "border border-solid border-amber-300 bg-amber-50 text-amber-700 dark:border-[#6b5420]/80 dark:bg-[#2a2312] dark:text-[#d4a85c]",
     };
   }
   if (p === "Высокий") {
     return {
       label: "Высокий",
       className:
-        "border border-solid border-[#8b4a1a]/85 bg-[#2a1a0f] text-[#e8a06a] shadow-[inset_0_1px_0_rgba(255,160,80,0.07)]",
+        "border border-solid border-orange-300 bg-orange-50 text-orange-700 dark:border-[#8b4a1a]/85 dark:bg-[#2a1a0f] dark:text-[#e8a06a]",
     };
   }
   if (/критич/i.test(p)) {
     return {
-      label: p.length > 14 ? `${p.slice(0, 12)}…` : p,
+      label: p.length > 14 ? `${p.slice(0, 12)}...` : p,
       className:
-        "border border-solid border-[#8b3a3a]/90 bg-[#2a1414] text-[#f0a8a8] shadow-[inset_0_1px_0_rgba(255,120,120,0.06)]",
+        "border border-solid border-red-300 bg-red-50 text-red-700 dark:border-[#8b3a3a]/90 dark:bg-[#2a1414] dark:text-[#f0a8a8]",
     };
   }
   return {
     label: p || "—",
-    className: "border border-solid border-[#3d444d] bg-[#1c2128] text-[#9da7b3]",
+    className: "border border-solid border-slate-300 bg-slate-100 text-slate-600 dark:border-[var(--kanban-border)] dark:bg-[var(--kanban-hover)] dark:text-slate-300",
   };
 }

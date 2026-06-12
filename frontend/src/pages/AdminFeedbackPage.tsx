@@ -31,12 +31,12 @@ const STATUS_LABEL: Record<FeedbackStatus, string> = {
 };
 
 const STATUS_COLOR: Record<FeedbackStatus, string> = {
-  new: "bg-blue-500/15 text-blue-400",
-  in_review: "bg-amber-500/15 text-amber-400",
-  planned: "bg-violet-500/15 text-violet-400",
-  in_progress: "bg-amber-500/15 text-amber-400",
-  resolved: "bg-emerald-500/15 text-emerald-400",
-  declined: "bg-red-500/15 text-red-400",
+  new: "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+  in_review: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  planned: "bg-violet-500/15 text-violet-700 dark:text-violet-400",
+  in_progress: "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  resolved: "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  declined: "bg-red-500/15 text-red-700 dark:text-red-400",
 };
 
 const ALL_STATUSES: FeedbackStatus[] = [

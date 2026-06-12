@@ -96,7 +96,7 @@ function userLabelById(
 function formatHistoryValue(s: string, max = 280): string {
   const t = s.trim();
   if (!t) return "—";
-  return t.length > max ? `${t.slice(0, max - 1)}…` : t;
+  return t.length > max ? `${t.slice(0, max - 3)}...` : t;
 }
 
 /** Шаг списания времени (минуты), как в форме Kanban. */
@@ -344,7 +344,7 @@ export function TaskDetailContent({
     () => columns.find((c) => c.id === mergedTask.columnId),
     [columns, mergedTask.columnId],
   );
-  const columnColor = columnForTask?.color ?? "#8b949e";
+  const columnColor = columnForTask?.color ?? "var(--kanban-text-muted)";
   const stageTitleForTheme = columnForTask?.title?.trim() || mergedTask.status?.trim() || "—";
   const detailStageVars = useMemo(
     () => resolveDetailStageThemeVars(stageTitleForTheme, columnColor),
@@ -431,7 +431,7 @@ export function TaskDetailContent({
   };
 
   const tabTriggerClass = cn(
-    "rounded-md px-3 py-1.5 text-xs font-medium text-[#8b949e] data-[state=active]:bg-[#21262d] data-[state=active]:text-[#E6EEF4] data-[state=active]:shadow-none sm:text-sm",
+    "rounded-md px-3 py-1.5 text-xs font-medium text-[var(--kanban-text-muted)] data-[state=active]:bg-[var(--kanban-hover)] data-[state=active]:text-[var(--kanban-text)] data-[state=active]:shadow-none sm:text-sm",
   );
 
   const tabLabel = (Icon: LucideIcon, label: string) => (
@@ -476,20 +476,20 @@ export function TaskDetailContent({
       <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
         {showInitialLoader ? (
           <div
-            className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-[#0D1117]/88 px-6 text-center backdrop-blur-[1px]"
+            className="absolute inset-0 z-30 flex flex-col items-center justify-center gap-3 bg-[var(--kanban-surface)]/88 px-6 text-center backdrop-blur-[1px]"
             aria-busy="true"
             aria-live="polite"
             data-testid="task-detail-initial-loader"
           >
-            <Loader2 className="h-8 w-8 shrink-0 animate-spin text-[#8b949e]" aria-hidden />
-            <span className="text-sm text-[#8b949e]">Загрузка карточки…</span>
+            <Loader2 className="h-8 w-8 shrink-0 animate-spin text-[var(--kanban-text-muted)]" aria-hidden />
+            <span className="text-sm text-[var(--kanban-text-muted)]">Загрузка карточки...</span>
           </div>
         ) : null}
 
-      <div className="detail-task-sticky-summary detail-task-control-deck shrink-0 border-b border-[#2F363C] px-3 py-3 sm:px-4">
+      <div className="detail-task-sticky-summary detail-task-control-deck shrink-0 border-b border-[var(--kanban-border)] px-3 py-3 sm:px-4">
         <div className="flex min-w-0 items-start gap-2">
           <h1
-            className="detail-title min-w-0 flex-1 text-base font-semibold leading-snug text-[#E6EEF4] sm:text-lg"
+            className="detail-title min-w-0 flex-1 text-base font-semibold leading-snug text-[var(--kanban-text)] sm:text-lg"
             data-testid={`detail-title-${summary.id}`}
           >
             {mergedTask.title}
@@ -502,15 +502,15 @@ export function TaskDetailContent({
               title="Открыть в Kanban"
               className="mt-0.5 shrink-0"
             >
-              <Link2 size={15} color="#8b5cf6" />
+              <Link2 size={15} color="var(--kanban-accent)" />
             </a>
           )}
         </div>
         {showTaskExtras && mergedTask.epicId != null && mergedTask.epicId > 0 ? (
-          <div className="mt-1.5 font-mono text-[11px] text-[#6e7681]" data-testid="detail-epic-id">
+          <div className="mt-1.5 font-mono text-[11px] text-[var(--kanban-text-faint)]" data-testid="detail-epic-id">
             Эпик #{mergedTask.epicId}
             {mergedTask.epicFull && mergedTask.epicFull !== "—" ? (
-              <span className="text-[#8b949e]"> · {mergedTask.epicFull}</span>
+              <span className="text-[var(--kanban-text-muted)]"> · {mergedTask.epicFull}</span>
             ) : null}
           </div>
         ) : null}
@@ -569,7 +569,7 @@ export function TaskDetailContent({
         className="flex min-h-0 flex-1 flex-col overflow-hidden"
       >
         <TabsList
-          className="mx-3 mb-0 mt-2 h-auto w-auto shrink-0 flex-wrap justify-start gap-1 rounded-lg border border-[#2F363C] bg-[#161b22] p-1 text-[#8b949e] sm:mx-4"
+          className="mx-3 mb-0 mt-2 h-auto w-auto shrink-0 flex-wrap justify-start gap-1 rounded-lg border border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] p-1 text-[var(--kanban-text-muted)] sm:mx-4"
           data-testid="detail-main-tabs"
         >
           <TabsTrigger value="overview" className={tabTriggerClass} data-testid="detail-tab-overview">
@@ -616,11 +616,11 @@ export function TaskDetailContent({
                 </div>
                 {/<[a-z][\s\S]*>/i.test(mergedTask.description) ? (
                   <KanbanCommentHtml
-                    className="detail-description-html text-[13px] leading-relaxed text-[#8b949e] [&_a]:text-[#8b5cf6] [&_p]:mb-2 [&_p:last-child]:mb-0"
+                    className="detail-description-html text-[13px] leading-relaxed text-[var(--kanban-text-muted)] [&_a]:text-[var(--kanban-accent)] [&_p]:mb-2 [&_p:last-child]:mb-0"
                     html={mergedTask.description}
                   />
                 ) : (
-                  <div className="whitespace-pre-wrap text-[13px] leading-relaxed text-[#8b949e]">{mergedTask.description}</div>
+                  <div className="whitespace-pre-wrap text-[13px] leading-relaxed text-[var(--kanban-text-muted)]">{mergedTask.description}</div>
                 )}
               </section>
             ) : null}
@@ -643,8 +643,8 @@ export function TaskDetailContent({
                 <div className="detail-meta-label" style={{ marginBottom: 6 }}>
                   Дата создания
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "#8b949e" }}>
-                  <Calendar size={13} style={{ color: "#444d56" }} />
+                <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--kanban-text-muted)" }}>
+                  <Calendar size={13} style={{ color: "var(--kanban-text-faint)" }} />
                   {mergedTask.createdAt ? new Date(mergedTask.createdAt).toLocaleDateString("ru-RU") : "—"}
                 </div>
               </div>
@@ -655,7 +655,7 @@ export function TaskDetailContent({
                     <div className="detail-meta-label" style={{ marginBottom: 6 }}>
                       Эпик
                     </div>
-                    <div style={{ fontSize: 13, color: "#8b949e", lineHeight: 1.45 }}>
+                    <div style={{ fontSize: 13, color: "var(--kanban-text-muted)", lineHeight: 1.45 }}>
                       {mergedTask.epicFull?.trim() && mergedTask.epicFull !== "—" ? mergedTask.epicFull : "—"}
                     </div>
                   </div>
@@ -663,13 +663,13 @@ export function TaskDetailContent({
                     <div className="detail-meta-label" style={{ marginBottom: 6 }}>
                       Ответственный
                     </div>
-                    <div style={{ fontSize: 13, color: "#8b949e" }}>{responsibleLabel(mergedTask)}</div>
+                    <div style={{ fontSize: 13, color: "var(--kanban-text-muted)" }}>{responsibleLabel(mergedTask)}</div>
                   </div>
                   <div className="detail-meta-card sm:col-span-2">
                     <div className="detail-meta-label" style={{ marginBottom: 8 }}>
                       Участники
                     </div>
-                    <div style={{ fontSize: 12, color: "#8b949e", lineHeight: 1.45 }}>{mergedTask.assignees.join(", ") || "—"}</div>
+                    <div style={{ fontSize: 12, color: "var(--kanban-text-muted)", lineHeight: 1.45 }}>{mergedTask.assignees.join(", ") || "—"}</div>
                   </div>
                 </>
               ) : null}
@@ -681,7 +681,7 @@ export function TaskDetailContent({
                   <span className="detail-section-label">Чек-лист</span>
                 </div>
                 {checklist.length === 0 ? (
-                  <div style={{ fontSize: 12, color: "#444d56" }}>Нет пунктов чек-листа</div>
+                  <div style={{ fontSize: 12, color: "var(--kanban-text-faint)" }}>Нет пунктов чек-листа</div>
                 ) : (
                   checklist.map((item) => (
                     <div
@@ -695,8 +695,8 @@ export function TaskDetailContent({
                           width: 16,
                           height: 16,
                           borderRadius: 3,
-                          border: `1px solid ${item.done ? "#8b5cf6" : "#2F363C"}`,
-                          background: item.done ? "#8b5cf6" : "transparent",
+                          border: `1px solid ${item.done ? "var(--kanban-accent)" : "var(--kanban-border)"}`,
+                          background: item.done ? "var(--kanban-accent)" : "transparent",
                           display: "flex",
                           alignItems: "center",
                           justifyContent: "center",
@@ -709,7 +709,7 @@ export function TaskDetailContent({
                       <span
                         style={{
                           fontSize: 13,
-                          color: item.done ? "#444d56" : "#8b949e",
+                          color: item.done ? "var(--kanban-text-faint)" : "var(--kanban-text-muted)",
                           textDecoration: item.done ? "line-through" : "none",
                         }}
                       >
@@ -722,7 +722,7 @@ export function TaskDetailContent({
             ) : null}
 
             <div className="drop-zone" style={{ marginBottom: 0 }}>
-              <Paperclip size={14} style={{ color: "#444d56" }} />
+              <Paperclip size={14} style={{ color: "var(--kanban-text-faint)" }} />
               <span>Файлы загружаются в Kanban</span>
             </div>
           </div>
@@ -740,25 +740,25 @@ export function TaskDetailContent({
                   <span className="detail-meta-label" style={{ margin: 0 }}>
                     Затраченное время
                   </span>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: "#E6EEF4" }} data-testid="detail-total-logged-time">
+                  <span style={{ fontSize: 13, fontWeight: 600, color: "var(--kanban-text)" }} data-testid="detail-total-logged-time">
                     {spentH}ч {spentM}м
                   </span>
                 </div>
                 {estimateWorkerMinutes > 0 ? (
                   <>
-                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 11, color: "#444d56" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4, fontSize: 11, color: "var(--kanban-text-faint)" }}>
                       <span>к оценке менеджера</span>
                       <span>
                         {managerH}ч {managerM}м
                       </span>
                     </div>
-                    <div style={{ height: 4, background: "#21262d", borderRadius: 2, overflow: "hidden" }}>
-                      <div style={{ height: "100%", width: `${spentVsManagerPct}%`, background: "#8b5cf6", borderRadius: 2 }} />
+                    <div style={{ height: 4, background: "var(--kanban-hover)", borderRadius: 2, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${spentVsManagerPct}%`, background: "var(--kanban-accent)", borderRadius: 2 }} />
                     </div>
                   </>
                 ) : totalLoggedMinutes > 0 ? (
-                  <div style={{ height: 4, background: "#21262d", borderRadius: 2, overflow: "hidden" }}>
-                    <div style={{ height: "100%", width: "100%", background: "#8b5cf6", borderRadius: 2 }} />
+                  <div style={{ height: 4, background: "var(--kanban-hover)", borderRadius: 2, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: "100%", background: "var(--kanban-accent)", borderRadius: 2 }} />
                   </div>
                 ) : null}
               </div>
@@ -774,7 +774,7 @@ export function TaskDetailContent({
                     </PopoverTrigger>
                     <PopoverContent
                       align="end"
-                      className="w-[min(calc(100vw-24px),340px)] border-[#2F363C] bg-[#161b22] p-3 text-[#E6EEF4] shadow-lg sm:w-[320px]"
+                      className="w-[min(calc(100vw-24px),340px)] border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] p-3 text-[var(--kanban-text)] shadow-lg sm:w-[320px]"
                       data-testid="detail-popover-log-work"
                     >
                       <div className="flex flex-col gap-3">
@@ -790,10 +790,10 @@ export function TaskDetailContent({
                         </div>
                         <div>
                           <div className="mfield-label mb-1">Время</div>
-                          <div className="flex flex-col items-center gap-1 rounded-md border border-[#2F363C] bg-[#0d1117] px-3 py-2">
+                          <div className="flex flex-col items-center gap-1 rounded-md border border-[var(--kanban-border)] bg-[var(--kanban-surface)] px-3 py-2">
                             <button
                               type="button"
-                              className="flex h-7 w-full max-w-[7rem] items-center justify-center rounded border border-[#2F363C] bg-[#161b22] text-[#8b949e] hover:bg-[#21262d] hover:text-[#E6EEF4] disabled:cursor-not-allowed disabled:opacity-40"
+                              className="flex h-7 w-full max-w-[7rem] items-center justify-center rounded border border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] text-[var(--kanban-text-muted)] hover:bg-[var(--kanban-hover)] hover:text-[var(--kanban-text)] disabled:cursor-not-allowed disabled:opacity-40"
                               aria-label="Увеличить на 15 минут"
                               disabled={spendMinutes >= LOG_WORK_MAX_MIN || postWork.isPending}
                               onClick={() => {
@@ -808,7 +808,7 @@ export function TaskDetailContent({
                               <ChevronUp className="h-4 w-4" aria-hidden />
                             </button>
                             <input
-                              className="w-full max-w-[7rem] border-0 bg-transparent py-0.5 text-center font-mono text-sm font-semibold tabular-nums text-[#E6EEF4] outline-none ring-0 placeholder:text-[#444d56] focus-visible:ring-0"
+                              className="w-full max-w-[7rem] border-0 bg-transparent py-0.5 text-center font-mono text-sm font-semibold tabular-nums text-[var(--kanban-text)] outline-none ring-0 placeholder:text-[var(--kanban-text-faint)] focus-visible:ring-0"
                               value={spendMaskDraft}
                               onChange={(e) => setSpendMaskDraft(e.target.value)}
                               onBlur={commitSpendMaskDraft}
@@ -820,7 +820,7 @@ export function TaskDetailContent({
                             />
                             <button
                               type="button"
-                              className="flex h-7 w-full max-w-[7rem] items-center justify-center rounded border border-[#2F363C] bg-[#161b22] text-[#8b949e] hover:bg-[#21262d] hover:text-[#E6EEF4] disabled:cursor-not-allowed disabled:opacity-40"
+                              className="flex h-7 w-full max-w-[7rem] items-center justify-center rounded border border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] text-[var(--kanban-text-muted)] hover:bg-[var(--kanban-hover)] hover:text-[var(--kanban-text)] disabled:cursor-not-allowed disabled:opacity-40"
                               aria-label="Уменьшить на 15 минут"
                               disabled={spendMinutes <= LOG_WORK_STEP_MIN || postWork.isPending}
                               onClick={() => {
@@ -835,7 +835,7 @@ export function TaskDetailContent({
                               <ChevronDown className="h-4 w-4" aria-hidden />
                             </button>
                           </div>
-                          <p className="mt-1.5 text-[11px] leading-snug text-[#6e7681]">
+                          <p className="mt-1.5 text-[11px] leading-snug text-[var(--kanban-text-faint)]">
                             Шаг ±15 минут; вручную — маска <span className="font-mono">0ч 00мин</span>, при уходе с поля округляется до 15 минут.
                           </p>
                         </div>
@@ -862,12 +862,12 @@ export function TaskDetailContent({
                   </Popover>
                 </div>
                 {workQ.isLoading ? (
-                  <div className="flex items-center gap-2 py-4 text-[13px] text-[#6e7681]">
+                  <div className="flex items-center gap-2 py-4 text-[13px] text-[var(--kanban-text-faint)]">
                     <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
-                    Загрузка журнала…
+                    Загрузка журнала...
                   </div>
                 ) : workLogs.length === 0 ? (
-                  <div className="rounded-md border border-[#2F363C] bg-[#161b22] px-4 py-6 text-center text-[13px] text-[#444d56]">Нет записей</div>
+                  <div className="rounded-md border border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] px-4 py-6 text-center text-[13px] text-[var(--kanban-text-faint)]">Нет записей</div>
                 ) : (
                   workLogs.map((log) => {
                     const lh = Math.floor(log.minutes / 60);
@@ -876,19 +876,19 @@ export function TaskDetailContent({
                     const whenLabel =
                       when && Number.isFinite(Date.parse(when)) ? new Date(when).toLocaleString("ru-RU") : when && when !== "—" ? when : "—";
                     return (
-                      <div key={log.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid #2F363C" }}>
+                      <div key={log.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 0", borderBottom: "1px solid var(--kanban-border)" }}>
                         <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, color: "#E6EEF4", fontWeight: 500 }}>{log.user}</div>
-                          <div style={{ fontSize: 12, color: "#8b949e", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          <div style={{ fontSize: 13, color: "var(--kanban-text)", fontWeight: 500 }}>{log.user}</div>
+                          <div style={{ fontSize: 12, color: "var(--kanban-text-muted)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                             {log.description?.trim() ? log.description : "—"}
                           </div>
                         </div>
                         <div style={{ textAlign: "right", flexShrink: 0 }}>
-                          <div style={{ fontSize: 13, color: "#E6EEF4", fontWeight: 600 }}>
+                          <div style={{ fontSize: 13, color: "var(--kanban-text)", fontWeight: 600 }}>
                             {lh > 0 ? `${lh}ч ` : ""}
                             {lm}м
                           </div>
-                          <div style={{ fontSize: 11, color: "#444d56", marginTop: 2 }}>{whenLabel}</div>
+                          <div style={{ fontSize: 11, color: "var(--kanban-text-faint)", marginTop: 2 }}>{whenLabel}</div>
                         </div>
                       </div>
                     );
@@ -900,14 +900,14 @@ export function TaskDetailContent({
                 <div className="detail-section-label" style={{ marginBottom: 8 }}>
                   Оценка менеджера
                 </div>
-                <div style={{ fontSize: 15, fontWeight: 600, color: "#E6EEF4" }} data-testid="detail-estimate-worker">
+                <div style={{ fontSize: 15, fontWeight: 600, color: "var(--kanban-text)" }} data-testid="detail-estimate-worker">
                   {estimateWorkerMinutes > 0 ? (
                     <>
                       {managerH}ч {managerM}м
-                      <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: "#8b949e" }}>({estimateWorkerMinutes} мин.)</span>
+                      <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 400, color: "var(--kanban-text-muted)" }}>({estimateWorkerMinutes} мин.)</span>
                     </>
                   ) : (
-                    <span style={{ color: "#444d56", fontWeight: 400 }}>—</span>
+                    <span style={{ color: "var(--kanban-text-faint)", fontWeight: 400 }}>—</span>
                   )}
                 </div>
               </div>
@@ -922,18 +922,18 @@ export function TaskDetailContent({
             data-testid="detail-panel-tasks"
           >
             <div className="detail-body-stack px-4 pb-6 pt-4">
-              <p className="mb-3 text-[12px] leading-relaxed text-[#6e7681]">
+              <p className="mb-3 text-[12px] leading-relaxed text-[var(--kanban-text-faint)]">
                 Задачи на этой доске, привязанные к этому эпику.
               </p>
               {epicChildTasks.length === 0 ? (
-                <div className="rounded-md border border-[#2F363C] bg-[#161b22] px-4 py-8 text-center text-[13px] text-[#444d56]">
+                <div className="rounded-md border border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] px-4 py-8 text-center text-[13px] text-[var(--kanban-text-faint)]">
                   Нет связанных задач на доске
                 </div>
               ) : (
                 <ul className="flex flex-col gap-2">
                   {epicChildTasks.map((t) => {
                     const col = columns.find((c) => c.id === t.columnId);
-                    const colColor = col?.color ?? "#8b949e";
+                    const colColor = col?.color ?? "var(--kanban-text-muted)";
                     const statusLabel = t.status?.trim() || "—";
                     const wf = t.workflowStatus?.trim();
                     const statusColor =
@@ -943,13 +943,13 @@ export function TaskDetailContent({
                       <li key={t.id}>
                         <button
                           type="button"
-                          className="flex w-full min-w-0 flex-col gap-2 rounded-md border border-[#2F363C] bg-[#161b22] px-3 py-2.5 text-left transition-colors hover:border-[#444d56] hover:bg-[#1c2128] disabled:cursor-default disabled:opacity-60"
+                          className="flex w-full min-w-0 flex-col gap-2 rounded-md border border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] px-3 py-2.5 text-left transition-colors hover:border-[var(--kanban-text-faint)] hover:bg-[var(--kanban-hover)] disabled:cursor-default disabled:opacity-60"
                           onClick={open}
                           disabled={!onOpenTask}
                           data-testid={`detail-epic-child-${t.id}`}
                         >
                           <div className="flex min-w-0 items-start justify-between gap-2">
-                            <span className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-[#E6EEF4]">
+                            <span className="min-w-0 flex-1 text-[13px] font-medium leading-snug text-[var(--kanban-text)]">
                               #{t.id} · {t.title}
                             </span>
                             <span
@@ -973,7 +973,7 @@ export function TaskDetailContent({
                               {t.priority}
                             </span>
                             {responsibleLabel(t) !== "—" ? (
-                              <span className="ml-auto truncate text-[11px] text-[#6e7681]">{responsibleLabel(t)}</span>
+                              <span className="ml-auto truncate text-[11px] text-[var(--kanban-text-faint)]">{responsibleLabel(t)}</span>
                             ) : null}
                           </div>
                         </button>
@@ -1005,13 +1005,13 @@ export function TaskDetailContent({
             data-testid="detail-panel-worklog"
           >
             <div className="detail-body-stack px-4 pb-6 pt-4">
-              <p className="mb-3 text-[12px] leading-relaxed text-[#6e7681]">
+              <p className="mb-3 text-[12px] leading-relaxed text-[var(--kanban-text-faint)]">
                 Списания времени по эпику и дочерним задачам (отдельный запрос work по каждой карточке). Направление в фильтрах
                 совпадает с графами эпика: по роли автора в Resonance (настройки участников Kanban), а не по компоненту задачи;
                 без явной роли — «Прочее».
               </p>
               <div className="mb-4 flex flex-wrap items-center gap-2">
-                <span className="text-[11px] font-medium uppercase tracking-wide text-[#6e7681]">Направления</span>
+                <span className="text-[11px] font-medium uppercase tracking-wide text-[var(--kanban-text-faint)]">Направления</span>
                 {EPIC_WORKLOG_LANE_CHIPS.map((c) => (
                   <button
                     key={c.lane}
@@ -1020,10 +1020,10 @@ export function TaskDetailContent({
                     className={cn(
                       "rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors",
                       worklogLaneFilter.length === 0
-                        ? "border-[#30363d] bg-[#161b22] text-[#8b949e] hover:border-[#8b5cf6]/45"
+                        ? "border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] text-[var(--kanban-text-muted)] hover:border-[var(--kanban-accent)]/45"
                         : worklogLaneFilter.includes(c.lane)
-                          ? "border-[#8b5cf6] bg-[#21262d] text-[#E6EEF4]"
-                          : "border-[#21262d] bg-transparent text-[#6e7681] hover:border-[#444d56]",
+                          ? "border-[var(--kanban-accent)] bg-[var(--kanban-hover)] text-[var(--kanban-text)]"
+                          : "border-[var(--kanban-hover)] bg-transparent text-[var(--kanban-text-faint)] hover:border-[var(--kanban-text-faint)]",
                     )}
                     data-testid={`detail-worklog-filter-${c.lane}`}
                   >
@@ -1033,7 +1033,7 @@ export function TaskDetailContent({
                 {worklogLaneFilter.length > 0 ? (
                   <button
                     type="button"
-                    className="ml-1 text-[11px] font-medium text-[#8b5cf6] hover:underline"
+                    className="ml-1 text-[11px] font-medium text-[var(--kanban-accent)] hover:underline"
                     onClick={() => setWorklogLaneFilter([])}
                     data-testid="detail-worklog-filter-reset"
                   >
@@ -1042,12 +1042,12 @@ export function TaskDetailContent({
                 ) : null}
               </div>
               {epicWorklogLoading && epicWorklogFiltered.length === 0 ? (
-                <div className="flex items-center gap-2 py-8 text-[13px] text-[#6e7681]">
+                <div className="flex items-center gap-2 py-8 text-[13px] text-[var(--kanban-text-faint)]">
                   <Loader2 className="h-4 w-4 shrink-0 animate-spin" aria-hidden />
-                  Загрузка worklog…
+                  Загрузка worklog...
                 </div>
               ) : epicWorklogFiltered.length === 0 ? (
-                <div className="rounded-md border border-[#2F363C] bg-[#161b22] px-4 py-8 text-center text-[13px] text-[#444d56]">
+                <div className="rounded-md border border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] px-4 py-8 text-center text-[13px] text-[var(--kanban-text-faint)]">
                   Нет записей по выбранным условиям
                 </div>
               ) : (
@@ -1063,28 +1063,28 @@ export function TaskDetailContent({
                     return (
                       <div
                         key={`${log.sourceTaskId}-${log.id}`}
-                        className="flex gap-3 border-b border-[#2F363C] py-3 last:border-b-0"
+                        className="flex gap-3 border-b border-[var(--kanban-border)] py-3 last:border-b-0"
                         data-testid={`detail-worklog-row-${log.sourceTaskId}-${log.id}`}
                       >
                         <div className="min-w-0 flex-1">
                           <div className="flex flex-wrap items-baseline gap-2">
-                            <span className="text-[13px] font-semibold text-[#E6EEF4]">{log.user}</span>
-                            <span className="rounded bg-[#21262d] px-1.5 py-0.5 font-mono text-[10px] text-[#8b949e]">
+                            <span className="text-[13px] font-semibold text-[var(--kanban-text)]">{log.user}</span>
+                            <span className="rounded bg-[var(--kanban-hover)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--kanban-text-muted)]">
                               {EPIC_WORKLOG_LANE_CHIPS.find((x) => x.lane === log.lane)?.label ?? log.lane}
                             </span>
                           </div>
-                          <div className="mt-1 font-mono text-[11px] text-[#6e7681]">
+                          <div className="mt-1 font-mono text-[11px] text-[var(--kanban-text-faint)]">
                             #{log.sourceTaskId} · {log.sourceTaskTitle}
                           </div>
-                          <div className="mt-0.5 text-[11px] text-[#6e7681]">Компонент задачи: {comp}</div>
-                          <div className="mt-1 text-[12px] text-[#8b949e]">{log.description?.trim() ? log.description : "—"}</div>
+                          <div className="mt-0.5 text-[11px] text-[var(--kanban-text-faint)]">Компонент задачи: {comp}</div>
+                          <div className="mt-1 text-[12px] text-[var(--kanban-text-muted)]">{log.description?.trim() ? log.description : "—"}</div>
                         </div>
                         <div className="shrink-0 text-right">
-                          <div className="text-[13px] font-semibold text-[#E6EEF4]">
+                          <div className="text-[13px] font-semibold text-[var(--kanban-text)]">
                             {lh > 0 ? `${lh}ч ` : ""}
                             {lm}м
                           </div>
-                          <div className="mt-1 text-[11px] text-[#444d56]">{whenLabel}</div>
+                          <div className="mt-1 text-[11px] text-[var(--kanban-text-faint)]">{whenLabel}</div>
                         </div>
                       </div>
                     );
@@ -1108,10 +1108,10 @@ export function TaskDetailContent({
                   return (
                     <div key={c.id} style={{ display: "flex", gap: 10, marginBottom: 12 }}>
                       <Avatar initials={authorAvatar.initials} color={authorAvatar.color} size={28} title={c.author} />
-                      <div style={{ flex: 1, background: "#161b22", border: "1px solid #2F363C", borderRadius: 4, padding: "10px 12px" }}>
+                      <div style={{ flex: 1, background: "var(--kanban-surface-2)", border: "1px solid var(--kanban-border)", borderRadius: 4, padding: "10px 12px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                          <span style={{ fontSize: 13, fontWeight: 500, color: "#E6EEF4" }}>{c.author}</span>
-                          <span style={{ fontSize: 11, color: "#444d56" }}>
+                          <span style={{ fontSize: 13, fontWeight: 500, color: "var(--kanban-text)" }}>{c.author}</span>
+                          <span style={{ fontSize: 11, color: "var(--kanban-text-faint)" }}>
                             {c.createdAt ? new Date(c.createdAt).toLocaleString("ru-RU") : ""}
                           </span>
                         </div>
@@ -1131,7 +1131,7 @@ export function TaskDetailContent({
                   minHeight: 80,
                   background: "none",
                   border: "none",
-                  color: "#E6EEF4",
+                  color: "var(--kanban-text)",
                   fontFamily: "inherit",
                   fontSize: 13,
                   padding: "10px",
@@ -1162,38 +1162,38 @@ export function TaskDetailContent({
         >
           <div className="detail-body-stack px-4 pb-6 pt-4">
             {historyEntries.length === 0 ? (
-              <div className="rounded-md border border-[#2F363C] bg-[#161b22] px-4 py-8 text-center text-[13px] text-[#444d56]">Нет записей в истории</div>
+              <div className="rounded-md border border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] px-4 py-8 text-center text-[13px] text-[var(--kanban-text-faint)]">Нет записей в истории</div>
             ) : (
               <ul className="flex flex-col gap-3">
                 {historyEntries.map((entry, idx) => (
                   <li
                     key={`${entry.updatedAt}-${idx}`}
-                    className="rounded-md border border-[#2F363C] bg-[#161b22] p-3"
+                    className="rounded-md border border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] p-3"
                     data-testid={`history-entry-${idx}`}
                   >
-                    <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-[12px] text-[#8b949e]">
+                    <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2 text-[12px] text-[var(--kanban-text-muted)]">
                       <span>
                         {entry.updatedAt !== "—" ? new Date(entry.updatedAt).toLocaleString("ru-RU") : "—"}
                       </span>
-                      <span className="font-medium text-[#E6EEF4]">{userLabelById(entry.updatedById, detailUsers, projectMemberIdToName)}</span>
+                      <span className="font-medium text-[var(--kanban-text)]">{userLabelById(entry.updatedById, detailUsers, projectMemberIdToName)}</span>
                     </div>
                     {entry.changes.length === 0 ? (
-                      <div className="text-[12px] text-[#444d56]">Без детализации изменений</div>
+                      <div className="text-[12px] text-[var(--kanban-text-faint)]">Без детализации изменений</div>
                     ) : (
                       <ul className="space-y-2">
                         {entry.changes.map((ch, j) => (
-                          <li key={j} className="border-t border-[#2F363C] pt-2 text-[13px] first:border-t-0 first:pt-0">
-                            <div className="font-medium text-[#E6EEF4]">{formatHistoryValue(ch.type, 120)}</div>
-                            <div className="mt-1 text-[#8b949e]">
-                              <span className="text-[#444d56]">Было: </span>
+                          <li key={j} className="border-t border-[var(--kanban-border)] pt-2 text-[13px] first:border-t-0 first:pt-0">
+                            <div className="font-medium text-[var(--kanban-text)]">{formatHistoryValue(ch.type, 120)}</div>
+                            <div className="mt-1 text-[var(--kanban-text-muted)]">
+                              <span className="text-[var(--kanban-text-faint)]">Было: </span>
                               <span title={ch.old}>{formatHistoryValue(ch.old)}</span>
                             </div>
-                            <div className="mt-0.5 text-[#8b949e]">
-                              <span className="text-[#444d56]">Стало: </span>
+                            <div className="mt-0.5 text-[var(--kanban-text-muted)]">
+                              <span className="text-[var(--kanban-text-faint)]">Стало: </span>
                               <span title={ch.new}>{formatHistoryValue(ch.new)}</span>
                             </div>
                             {ch.details.map((d, k) => (
-                              <div key={k} className="mt-1 text-[12px] text-[#444d56]">
+                              <div key={k} className="mt-1 text-[12px] text-[var(--kanban-text-faint)]">
                                 {d}
                               </div>
                             ))}

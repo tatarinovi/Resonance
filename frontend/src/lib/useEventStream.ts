@@ -6,8 +6,8 @@
  * Native `EventSource` cannot send Authorization headers, so this hook uses
  * `@microsoft/fetch-event-source` and keeps the JWT out of URLs and logs.
  */
-import { useEffect } from "react";
-import { fetchEventSource, type EventSourceMessage } from "@microsoft/fetch-event-source";
+import { useEffect, useState } from "react";
+import { EventStreamContentType, fetchEventSource, type EventSourceMessage } from "@microsoft/fetch-event-source";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { tokenStorage } from "./api";
@@ -17,6 +17,16 @@ import {
 } from "./browserDesktopNotifications";
 
 type Handler = (payload: unknown) => void;
+
+export type RealtimeStatus =
+  | "offline"
+  | "connecting"
+  | "online"
+  | "reconnecting";
+
+interface UseEventStreamOptions {
+  enabled: boolean;
+}
 
 const TYPE_HANDLERS: Record<string, (qc: ReturnType<typeof useQueryClient>) => Handler> = {
   "ticket.updated": (qc) => () => {
@@ -106,15 +116,23 @@ const TYPE_HANDLERS: Record<string, (qc: ReturnType<typeof useQueryClient>) => H
   },
 };
 
-export function useEventStream(enabled: boolean) {
+export function useEventStream({ enabled }: UseEventStreamOptions): RealtimeStatus {
   const qc = useQueryClient();
+  const [status, setStatus] = useState<RealtimeStatus>("offline");
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      setStatus("offline");
+      return;
+    }
     const token = tokenStorage.get();
-    if (!token) return;
+    if (!token) {
+      setStatus("offline");
+      return;
+    }
 
     const controller = new AbortController();
+    setStatus("connecting");
 
     function dispatch(type: string, raw: string) {
       let payload: unknown = null;
@@ -132,12 +150,21 @@ export function useEventStream(enabled: boolean) {
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      onopen(response: Response) {
+        const contentType = response.headers.get("content-type");
+        if (!contentType?.startsWith(EventStreamContentType)) {
+          throw new Error(`Expected content-type to be ${EventStreamContentType}, Actual: ${contentType}`);
+        }
+        setStatus("online");
+        return Promise.resolve();
+      },
       onmessage(message: EventSourceMessage) {
         if (!message.event || message.event === "ping") return;
         dispatch(message.event, message.data);
       },
       onerror() {
         if (controller.signal.aborted) return;
+        setStatus("reconnecting");
         return 5000;
       },
     });
@@ -146,4 +173,6 @@ export function useEventStream(enabled: boolean) {
       controller.abort();
     };
   }, [enabled, qc]);
+
+  return status;
 }

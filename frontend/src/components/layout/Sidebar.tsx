@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { Link, useLocation } from "@/lib/router";
 import {
   LayoutDashboard, Inbox, HelpCircle, Layers, Activity,
-  BarChart2, Users, FolderKanban, FolderOpen, Settings, User, MessageSquare,
+  BarChart2, Users, FolderKanban, FolderOpen, MessageSquare,
   Radio, Plus, ClipboardList, Loader2, CalendarDays,
 } from "lucide-react";
 import { useIsNotaWorkspace } from "@/hooks/useIsNotaWorkspace";
@@ -51,15 +51,13 @@ const mainNav: NavItem[] = [
   { href: "/inbox", icon: Inbox, label: "Входящие" },
   { href: "/questions", icon: HelpCircle, label: "Вопросы" },
   { href: "/epics", icon: Layers, label: "Эпики" },
+  { href: "/projects", icon: FolderKanban, label: "Проекты" },
   { href: "/activity", icon: Activity, label: "Активность" },
   { href: "/statistics", icon: BarChart2, label: "Статистика" },
 ];
 
 const bottomNav: NavItem[] = [
   { href: "/users", icon: Users, label: "Пользователи", adminOnly: true },
-  { href: "/projects", icon: FolderKanban, label: "Проекты" },
-  { href: "/settings", icon: Settings, label: "Настройки" },
-  { href: "/profile", icon: User, label: "Профиль" },
   { href: "/feedback", icon: MessageSquare, label: "Обратная связь" },
   { href: "/admin/feedback", icon: ClipboardList, label: "Заявки ОС", adminOnly: true },
 ];
@@ -251,6 +249,7 @@ export function Sidebar({ onNavigate, sidebarWidth }: SidebarProps) {
             item={{
               ...item,
               badge: item.href === "/inbox" ? inboxUnread : item.badge,
+              icon: item.href === "/projects" && isNota ? FolderOpen : item.icon,
             }}
             onNavigate={onNavigate}
             compact={compact}
@@ -392,10 +391,7 @@ export function Sidebar({ onNavigate, sidebarWidth }: SidebarProps) {
           .map(item => (
             <NavLink
               key={item.href}
-              item={{
-                ...item,
-                icon: item.href === "/projects" && isNota ? FolderOpen : item.icon,
-              }}
+              item={item}
               onNavigate={onNavigate}
               compact={compact}
             />

@@ -51,10 +51,10 @@ function directionPayloadValue(value: string): string | undefined {
 const roles: Role[] = ["Координатор", "Эксперт", "Разработчик", "Админ"];
 
 const roleColors: Record<Role, string> = {
-  Координатор: "bg-blue-500/15 text-blue-400",
-  Эксперт: "bg-emerald-500/15 text-emerald-400",
-  Разработчик: "bg-amber-500/15 text-amber-400",
-  Админ: "bg-red-500/15 text-red-400",
+  "Координатор": "bg-blue-500/15 text-blue-700 dark:text-blue-400",
+  "Эксперт": "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400",
+  "Разработчик": "bg-amber-500/15 text-amber-700 dark:text-amber-400",
+  "Админ": "bg-red-500/15 text-red-700 dark:text-red-400",
 };
 
 const USER_DIRECTION_OPTIONS_DEV = [
@@ -271,7 +271,7 @@ export default function UsersPage() {
                     </td>
                     <td className="px-3 py-3">
                       <span
-                        className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${u.isActive ? "bg-emerald-500/15 text-emerald-400" : "bg-slate-500/15 text-slate-400"}`}
+                        className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${u.isActive ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-400" : "bg-slate-500/15 text-slate-600 dark:text-slate-400"}`}
                       >
                         {u.isActive ? "Активен" : "Неактивен"}
                       </span>

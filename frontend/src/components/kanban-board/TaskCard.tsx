@@ -1,4 +1,4 @@
-import { forwardRef } from "react";
+﻿import { forwardRef } from "react";
 import type { DraggableAttributes, DraggableSyntheticListeners } from "@dnd-kit/core";
 import { MessageSquare, Paperclip } from "lucide-react";
 
@@ -29,7 +29,7 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
       {...dndAttributes}
     >
       <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{ fontSize: 11, color: "#444d56", fontFamily: "monospace" }} data-testid={`text-task-id-${task.id}`}>
+        <span style={{ fontSize: 11, color: "var(--kanban-text-faint)", fontFamily: "monospace" }} data-testid={`text-task-id-${task.id}`}>
           #{task.id}
         </span>
         <span className={`badge ${PRIORITY_CLASS[task.priority] ?? "badge-priority-medium"}`} data-testid={`badge-priority-${task.id}`}>
@@ -39,7 +39,7 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
       <p
         style={{
           fontSize: 13,
-          color: "#E6EEF4",
+          color: "var(--kanban-text)",
           lineHeight: 1.45,
           marginBottom: 8,
           display: "-webkit-box",
@@ -59,7 +59,7 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
             title={task.epicFull}
             data-testid={`badge-epic-${task.id}`}
           >
-            <span style={{ fontFamily: "monospace", color: "#6e7681", marginRight: 4 }}>#{task.epicId}</span>
+            <span style={{ fontFamily: "monospace", color: "var(--kanban-text-faint)", marginRight: 4 }}>#{task.epicId}</span>
             <span>{task.epic}</span>
           </span>
         ) : null}
@@ -75,10 +75,10 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
           alignItems: "center",
           justifyContent: "space-between",
           paddingTop: 8,
-          borderTop: "1px solid #2F363C",
+          borderTop: "1px solid var(--kanban-border)",
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#444d56" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, color: "var(--kanban-text-faint)" }}>
           {task.commentCount > 0 && (
             <span style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 11 }} data-testid={`text-comments-${task.id}`}>
               <MessageSquare size={12} /> {task.commentCount}
@@ -94,7 +94,7 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
           {task.assignees.map((name, i) => {
             const a = getAvatarInfo(name);
             return (
-              <div key={name + i} style={{ marginLeft: i > 0 ? -6 : 0, borderRadius: "50%", border: "2px solid #0D1117" }}>
+              <div key={name + i} style={{ marginLeft: i > 0 ? -6 : 0, borderRadius: "50%", border: "2px solid var(--kanban-surface)" }}>
                 <Avatar initials={a.initials} color={a.color} size={20} title={name} />
               </div>
             );

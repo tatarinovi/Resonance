@@ -56,7 +56,7 @@ export function KanbanEpicAnalyticsPanel({
   }
 
   return (
-    <div className="rounded-lg border border-[#2F363C] bg-[#0D1117] p-3 text-[#E6EEF4]">
+    <div className="rounded-lg border border-border bg-card p-3 text-foreground">
       <EpicAnalyticsOverview d={charts.data} chartsReady={charts.data.charts_ready} />
     </div>
   );

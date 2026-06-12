@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 
 /** Единый вид полей даты под тёмную тему (в т.ч. всплывающий календарь в Chromium). */
 const planningDateInputClassName =
-  "bg-background text-foreground [color-scheme:dark] shadow-sm [font-variant-numeric:tabular-nums]";
+  "bg-background text-foreground [color-scheme:light_dark] shadow-sm [font-variant-numeric:tabular-nums]";
 
 function riskLevelRu(level: PlannerRiskLevel): string {
   if (level === "high") return "высокий";

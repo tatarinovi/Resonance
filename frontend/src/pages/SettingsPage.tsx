@@ -17,6 +17,7 @@ import {
   setDesktopNotificationsOptIn,
   type DesktopNotificationPermission,
 } from "@/lib/browserDesktopNotifications";
+import { useThemePreference } from "@/contexts/ThemeContext";
 
 const tabs = [
   { id: "profile", label: "Профиль", icon: User },
@@ -30,6 +31,7 @@ export default function SettingsPage() {
   const { me, currentUser, logout, refresh } = useAuth();
   const navigate = useNavigate();
   const updateMe = useUpdateMe();
+  const { isDark, setDarkMode } = useThemePreference();
   const [tab, setTab] = useState<Tab>("profile");
   const deliveryHealth = useDeliveryHealthQuery(tab === "notifications");
 
@@ -473,7 +475,7 @@ export default function SettingsPage() {
                   <p className="text-sm font-medium text-foreground">Тёмная тема</p>
                   <p className="text-xs text-muted-foreground">Основной режим</p>
                 </div>
-                <Switch checked={true} onCheckedChange={() => toast.info("Тёмная тема — основной режим")} data-testid="switch-dark-mode" />
+                <Switch checked={isDark} onCheckedChange={setDarkMode} data-testid="switch-dark-mode" />
               </div>
               <div className="flex items-center justify-between">
                 <div>

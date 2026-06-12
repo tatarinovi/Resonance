@@ -68,7 +68,7 @@ function ExecutorMultiSelect({
 
   const summary =
     value.length === 0
-      ? "Выберите исполнителей…"
+      ? "Выберите исполнителей..."
       : value
           .map((id) => members.find((m) => m.id === id)?.name)
           .filter(Boolean)
@@ -84,7 +84,7 @@ function ExecutorMultiSelect({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="h-auto min-h-[42px] w-full justify-between border-[#2F363C] bg-[#0D1117] px-3 py-2 text-left font-normal text-[#E6EEF4] hover:bg-[#161b22] hover:text-[#E6EEF4]"
+            className="h-auto min-h-[42px] w-full justify-between border-[var(--kanban-border)] bg-[var(--kanban-surface)] px-3 py-2 text-left font-normal text-[var(--kanban-text)] hover:bg-[var(--kanban-surface-2)] hover:text-[var(--kanban-text)]"
             data-testid="button-executor-select"
           >
             <span className="line-clamp-2 flex-1 pr-2 text-[13px] leading-snug">{summary}</span>
@@ -92,13 +92,13 @@ function ExecutorMultiSelect({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-[var(--radix-popover-trigger-width)] border-[#2F363C] bg-[#161b22] p-0 text-[#E6EEF4]"
+          className="w-[var(--radix-popover-trigger-width)] border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] p-0 text-[var(--kanban-text)]"
           align="start"
         >
-          <Command className="rounded-md bg-[#161b22] text-[#E6EEF4]" shouldFilter>
-            <CommandInput placeholder="Поиск по имени…" className="h-9 border-[#2F363C] text-[#E6EEF4] placeholder:text-[#6e7681]" />
+          <Command className="rounded-md bg-[var(--kanban-surface-2)] text-[var(--kanban-text)]" shouldFilter>
+            <CommandInput placeholder="Поиск по имени..." className="h-9 border-[var(--kanban-border)] text-[var(--kanban-text)] placeholder:text-[var(--kanban-text-faint)]" />
             <CommandList className="max-h-[240px]">
-              <CommandEmpty className="py-3 text-center text-[13px] text-[#8b949e]">Никого не найдено</CommandEmpty>
+              <CommandEmpty className="py-3 text-center text-[13px] text-[var(--kanban-text-muted)]">Никого не найдено</CommandEmpty>
               <CommandGroup>
                 {members.map((m) => {
                   const selected = value.includes(m.id);
@@ -107,15 +107,15 @@ function ExecutorMultiSelect({
                       key={m.id}
                       value={m.name}
                       onSelect={() => toggle(m.id)}
-                      className="cursor-pointer text-[#E6EEF4] aria-selected:bg-[#21262d]"
+                      className="cursor-pointer text-[var(--kanban-text)] aria-selected:bg-[var(--kanban-hover)]"
                       data-testid={`executor-option-${m.id}`}
                     >
                       <div
-                        className="mr-2 flex h-4 w-4 items-center justify-center rounded border border-[#444d56] bg-[#0D1117]"
+                        className="mr-2 flex h-4 w-4 items-center justify-center rounded border border-[var(--kanban-text-faint)] bg-[var(--kanban-surface)]"
                         onClick={(e) => e.stopPropagation()}
                         onPointerDown={(e) => e.stopPropagation()}
                       >
-                        {selected ? <Check className="h-3 w-3 text-[#a78bfa]" /> : null}
+                        {selected ? <Check className="h-3 w-3 text-[var(--kanban-accent-emphasis)]" /> : null}
                       </div>
                       <span className="flex-1">{m.name}</span>
                     </CommandItem>
@@ -149,7 +149,7 @@ function EpicSearchSelect({
   const summary =
     value == null
       ? "Без эпика"
-      : rows.find((e) => e.id === value)?.name ?? (epicsQ.isLoading ? "Загрузка…" : `Эпик #${value}`);
+      : rows.find((e) => e.id === value)?.name ?? (epicsQ.isLoading ? "Загрузка..." : `Эпик #${value}`);
 
   return (
     <div className="mfield" data-testid="input-group-Эпик">
@@ -161,7 +161,7 @@ function EpicSearchSelect({
             variant="outline"
             role="combobox"
             aria-expanded={open}
-            className="h-auto min-h-[42px] w-full justify-between border-[#2F363C] bg-[#0D1117] px-3 py-2 text-left font-normal text-[#E6EEF4] hover:bg-[#161b22] hover:text-[#E6EEF4]"
+            className="h-auto min-h-[42px] w-full justify-between border-[var(--kanban-border)] bg-[var(--kanban-surface)] px-3 py-2 text-left font-normal text-[var(--kanban-text)] hover:bg-[var(--kanban-surface-2)] hover:text-[var(--kanban-text)]"
             data-testid="button-epic-select"
           >
             <span className="line-clamp-2 flex-1 pr-2 text-[13px] leading-snug">{summary}</span>
@@ -169,14 +169,14 @@ function EpicSearchSelect({
           </Button>
         </PopoverTrigger>
         <PopoverContent
-          className="w-[var(--radix-popover-trigger-width)] border-[#2F363C] bg-[#161b22] p-0 text-[#E6EEF4]"
+          className="w-[var(--radix-popover-trigger-width)] border-[var(--kanban-border)] bg-[var(--kanban-surface-2)] p-0 text-[var(--kanban-text)]"
           align="start"
         >
-          <Command className="rounded-md bg-[#161b22] text-[#E6EEF4]" shouldFilter>
-            <CommandInput placeholder="Поиск по названию или id…" className="h-9 border-[#2F363C] text-[#E6EEF4] placeholder:text-[#6e7681]" />
+          <Command className="rounded-md bg-[var(--kanban-surface-2)] text-[var(--kanban-text)]" shouldFilter>
+            <CommandInput placeholder="Поиск по названию или id..." className="h-9 border-[var(--kanban-border)] text-[var(--kanban-text)] placeholder:text-[var(--kanban-text-faint)]" />
             <CommandList className="max-h-[240px]">
-              <CommandEmpty className="py-3 text-center text-[13px] text-[#8b949e]">
-                {epicsQ.isLoading ? "Загрузка…" : "Ничего не найдено"}
+              <CommandEmpty className="py-3 text-center text-[13px] text-[var(--kanban-text-muted)]">
+                {epicsQ.isLoading ? "Загрузка..." : "Ничего не найдено"}
               </CommandEmpty>
               <CommandGroup>
                 <CommandItem
@@ -185,7 +185,7 @@ function EpicSearchSelect({
                     onChange(null);
                     setOpen(false);
                   }}
-                  className="cursor-pointer text-[#E6EEF4] aria-selected:bg-[#21262d]"
+                  className="cursor-pointer text-[var(--kanban-text)] aria-selected:bg-[var(--kanban-hover)]"
                   data-testid="epic-option-none"
                 >
                   Без эпика
@@ -198,11 +198,11 @@ function EpicSearchSelect({
                       onChange(e.id);
                       setOpen(false);
                     }}
-                    className="cursor-pointer text-[#E6EEF4] aria-selected:bg-[#21262d]"
+                    className="cursor-pointer text-[var(--kanban-text)] aria-selected:bg-[var(--kanban-hover)]"
                     data-testid={`epic-option-${e.id}`}
                   >
                     <span className="flex-1">{e.name}</span>
-                    <span className="ml-2 shrink-0 text-[11px] text-[#8b949e]">#{e.id}</span>
+                    <span className="ml-2 shrink-0 text-[11px] text-[var(--kanban-text-muted)]">#{e.id}</span>
                   </CommandItem>
                 ))}
               </CommandGroup>
@@ -452,7 +452,7 @@ export function CreateTaskContent({
   const refsMissing = !typeOptions.length || !priorityOptions.length;
 
   return (
-    <div className="kanban-create-panel flex h-full min-h-0 flex-1 flex-col bg-[#161b22] text-[#E6EEF4]">
+    <div className="kanban-create-panel flex h-full min-h-0 flex-1 flex-col bg-[var(--kanban-surface-2)] text-[var(--kanban-text)]">
       <div className="modal-header shrink-0">
         <span className="modal-title">Создать задачу</span>
         <button
@@ -466,7 +466,7 @@ export function CreateTaskContent({
         </button>
       </div>
       <div className="modal-body kanban-scroll min-h-0 flex-1 overflow-y-auto">
-        <div className="mb-4 flex flex-col gap-2 border-b border-[#2F363C] pb-4">
+        <div className="mb-4 flex flex-col gap-2 border-b border-[var(--kanban-border)] pb-4">
           <div className="mfield mb-0">
             <label className="mfield-label">Шаблон</label>
             <select
@@ -494,7 +494,7 @@ export function CreateTaskContent({
             onClick={handleSaveAsTemplate}
             data-testid="button-save-create-task-template"
           >
-            Создать шаблон…
+            Создать шаблон...
           </button>
         </div>
 
@@ -559,9 +559,9 @@ export function CreateTaskContent({
 
         <div className="mfield" style={{ marginTop: 14 }} data-testid="create-task-checklist">
           <label className="mfield-label">Чек-лист</label>
-          <p className="mb-2 text-[11px] leading-snug text-[#6e7681]">Сохраняются в Kanban после создания задачи.</p>
+          <p className="mb-2 text-[11px] leading-snug text-[var(--kanban-text-faint)]">Сохраняются в Kanban после создания задачи.</p>
           {checklistLines.length === 0 ? (
-            <p className="mb-2 text-[12px] text-[#8b949e]">Пока нет пунктов.</p>
+            <p className="mb-2 text-[12px] text-[var(--kanban-text-muted)]">Пока нет пунктов.</p>
           ) : (
             checklistLines.map((line, i) => (
               <div key={i} className="mb-2 flex items-center gap-2">
@@ -576,7 +576,7 @@ export function CreateTaskContent({
                 />
                 <button
                   type="button"
-                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[#2F363C] bg-[#0D1117] text-[#8b949e] hover:border-[#f85149]/50 hover:text-[#f85149]"
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-[var(--kanban-border)] bg-[var(--kanban-surface)] text-[var(--kanban-text-muted)] hover:border-[var(--kanban-danger)]/50 hover:text-[var(--kanban-danger)]"
                   aria-label="Удалить пункт"
                   onClick={() => setChecklistLines((prev) => prev.filter((_, j) => j !== i))}
                   data-testid={`button-remove-checklist-${i}`}
@@ -597,8 +597,8 @@ export function CreateTaskContent({
         </div>
 
         <Accordion type="single" collapsible className="kanban-create-accordion mt-4 w-full border-0">
-          <AccordionItem value="more" className="kanban-create-acc-item border-b border-[#2F363C]">
-            <AccordionTrigger className={cn("kanban-create-acc-trigger hover:no-underline py-2 text-[#E6EEF4]")}>
+          <AccordionItem value="more" className="kanban-create-acc-item border-b border-[var(--kanban-border)]">
+            <AccordionTrigger className={cn("kanban-create-acc-trigger hover:no-underline py-2 text-[var(--kanban-text)]")}>
               Дополнительные поля
             </AccordionTrigger>
             <AccordionContent className="kanban-create-acc-content space-y-3 pb-3">

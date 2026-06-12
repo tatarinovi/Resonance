@@ -1,10 +1,10 @@
-import { Priority } from "@/data/questions";
+﻿import { Priority } from "@/data/questions";
 
 const colors: Record<Priority, string> = {
-  "Критический": "text-red-400",
-  "Высокий": "text-orange-400",
-  "Средний": "text-amber-400",
-  "Низкий": "text-slate-400",
+  "Критический": "text-red-700 dark:text-red-400",
+  "Высокий": "text-orange-700 dark:text-orange-400",
+  "Средний": "text-amber-700 dark:text-amber-400",
+  "Низкий": "text-slate-600 dark:text-slate-400",
 };
 
 const dots: Record<Priority, string> = {

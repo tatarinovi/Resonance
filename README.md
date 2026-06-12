@@ -84,14 +84,29 @@ Resonance помогает избавиться от этой рутины:
 
 ## Скриншоты
 
-> Скриншоты интерфейса будут добавлены перед стабильным релизом.
+<details>
+<summary><strong>Dark theme</strong></summary>
 
-Рекомендуется показать:
+### Главная
+<img src="helps/images/mainpage(dark).png" width="900" alt="Dashboard (Dark)">
 
-* рабочий стол;
-* карточку вопроса;
-* уведомления и дайджесты;
-* административные разделы.
+### Страница вопроса
+<img src="helps/images/questionpage(dark).png" width="900" alt="Question Details (Dark)">
+
+### Создание вопроса
+<img src="helps/images/createquestion(dark).png" width="900" alt="Create Question">
+
+</details>
+
+<details>
+<summary><strong>Light theme</strong></summary>
+
+### Главная
+<img src="helps/images/mainpage(light).png" width="900" alt="Dashboard (Light)">
+
+### Страница вопроса
+<img src="helps/images/questionpage(light).png" width="900" alt="Question Details (Light)">
+</details>
 
 ---
 
