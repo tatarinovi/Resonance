@@ -85,7 +85,7 @@ Resonance помогает избавиться от этой рутины:
 ## Скриншоты
 
 <details>
-<summary><strong>Dark theme</strong></summary>
+<summary><strong>Тёмная тема</strong></summary>
 
 ### Главная
 <img src="helps/images/mainpage(dark).png" width="900" alt="Dashboard (Dark)">
@@ -99,7 +99,7 @@ Resonance помогает избавиться от этой рутины:
 </details>
 
 <details>
-<summary><strong>Light theme</strong></summary>
+<summary><strong>Светлая тема</strong></summary>
 
 ### Главная
 <img src="helps/images/mainpage(light).png" width="900" alt="Dashboard (Light)">
