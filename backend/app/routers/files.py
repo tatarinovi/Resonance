@@ -28,10 +28,9 @@ ALLOWED_MIME_EXACT = {
     "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "application/vnd.ms-powerpoint",
     "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    "application/octet-stream",
 }
 ALLOWED_EXTENSIONS = {
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg",
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp",
     ".mp4", ".mov", ".webm", ".avi",
     ".mp3", ".wav", ".ogg", ".m4a",
     ".pdf",
@@ -43,13 +42,16 @@ ALLOWED_EXTENSIONS = {
 
 
 def _is_allowed(filename: str | None, mime: str | None) -> bool:
+    normalized_mime = (mime or "").strip().lower()
+    ext = os.path.splitext(filename or "")[1].lower()
+    if normalized_mime == "image/svg+xml" or ext == ".svg":
+        return False
     if mime:
-        if any(mime.startswith(prefix) for prefix in ALLOWED_MIME_PREFIXES):
+        if any(normalized_mime.startswith(prefix) for prefix in ALLOWED_MIME_PREFIXES):
             return True
-        if mime in ALLOWED_MIME_EXACT:
+        if normalized_mime in ALLOWED_MIME_EXACT:
             return True
     if filename:
-        ext = os.path.splitext(filename)[1].lower()
         if ext in ALLOWED_EXTENSIONS:
             return True
     return False

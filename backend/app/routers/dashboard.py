@@ -161,11 +161,11 @@ def _is_ticket_transition_allowed(
     if pair == (TicketStatus.FORWARDED, TicketStatus.ANSWERED):
         if assignee_id is not None and user.id == assignee_id:
             return True
-        return is_coordinator
+        return can_answer_as_expert or is_coordinator
     if pair == (TicketStatus.FORWARDED, TicketStatus.RETURNED):
         if assignee_id is not None and user.id == assignee_id:
             return False
-        return is_coordinator
+        return can_answer_as_expert or is_coordinator
 
     if pair == (TicketStatus.RETURNED, TicketStatus.PENDING_APPROVAL):
         return is_author

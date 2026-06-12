@@ -123,21 +123,11 @@ services:
       - caddy_data:/data
       - caddy_config:/config
       - ./Caddyfile:/etc/caddy/Caddyfile
-      - ./apps:/srv/apps
       - ./static:/srv/static
     networks:
       - matrix-app-net
     extra_hosts:
       - "host.docker.internal:host-gateway"
-  vizitka:
-    build:
-      context: ./apps/vizitka
-      dockerfile: Dockerfile
-    container_name: vizitka
-    restart: always
-    networks:
-      - matrix-app-net
-
 networks:
   matrix-app-net:
     name: matrix-app-net

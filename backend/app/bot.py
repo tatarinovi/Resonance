@@ -17,12 +17,16 @@ logging.getLogger("nio.responses").setLevel(logging.ERROR)
 
 async def main() -> None:
     logging.info("Bot process starting")
+    settings = get_settings()
     bootstrap_database(run_migrations=False)
     start_scheduler()
-    await run_startup_digest_test()
+    if settings.run_startup_digest_test:
+        await run_startup_digest_test()
+    else:
+        logging.info("Startup digest test disabled by RUN_STARTUP_DIGEST_TEST=false")
 
     tasks = [matrix_bot.run()]
-    if get_settings().telegram_enabled:
+    if settings.telegram_enabled:
         tasks.append(telegram_bot.run())
     else:
         logging.info("Telegram bot disabled by TELEGRAM_ENABLED=false")

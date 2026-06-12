@@ -2,20 +2,28 @@
 
 ## Supported Versions
 
-Use this section to tell people about which versions of your project are
-currently being supported with security updates.
+Until the first tagged public release, only the current `master` branch and the
+latest production image tag are supported for security fixes.
 
-| Version | Supported          |
-| ------- | ------------------ |
-| 5.1.x   | :white_check_mark: |
-| 5.0.x   | :x:                |
-| 4.0.x   | :white_check_mark: |
-| < 4.0   | :x:                |
+After v1.0, security fixes are provided for the latest minor release unless a
+separate support agreement says otherwise.
 
 ## Reporting a Vulnerability
 
-Use this section to tell people how to report a vulnerability.
+Do not open public GitHub issues for suspected vulnerabilities.
 
-Tell them where to go, how often they can expect to get an update on a
-reported vulnerability, what to expect if the vulnerability is accepted or
-declined, etc.
+Report security issues privately to the project owner/maintainer. Include:
+
+- affected version or image tag;
+- reproduction steps;
+- expected impact;
+- relevant logs, screenshots, or request examples without real secrets.
+
+The maintainer should acknowledge the report within 3 business days, triage the
+issue, and coordinate a fix or mitigation before public disclosure.
+
+## Secret Handling
+
+Never commit `.env`, `.env.production`, access tokens, database dumps, private
+keys, or production logs with secrets. If a secret is exposed, rotate it before
+the next deployment and remove it from Git history before public publication.

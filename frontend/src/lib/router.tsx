@@ -48,6 +48,7 @@ export interface LinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnchorEle
   href: string;
   children?: React.ReactNode;
   replace?: boolean;
+  state?: unknown;
 }
 
 /**
@@ -56,9 +57,9 @@ export interface LinkProps extends Omit<React.AnchorHTMLAttributes<HTMLAnchorEle
  * applies an extra anchor wrapper, so we forward children unchanged.
  */
 export const Link = React.forwardRef<HTMLAnchorElement, LinkProps>(
-  function Link({ href, children, replace, className, ...rest }, ref) {
+  function Link({ href, children, replace, state, className, ...rest }, ref) {
     return (
-      <RouterLink ref={ref} to={href} replace={replace} className={className} {...rest}>
+      <RouterLink ref={ref} to={href} replace={replace} state={state} className={className} {...rest}>
         {children}
       </RouterLink>
     );

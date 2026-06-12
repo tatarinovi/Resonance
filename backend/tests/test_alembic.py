@@ -29,7 +29,7 @@ def test_migration_chain_is_linear_and_terminates_at_head():
     heads = script.get_heads()
     assert len(heads) == 1, f"Migrations must converge to a single head, got {heads}"
 
-    bases = script.get_bases()
+    bases = tuple(script.get_bases())
     assert bases == ("0001_baseline",), f"Baseline should be the only root, got {bases}"
 
 

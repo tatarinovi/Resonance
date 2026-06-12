@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 
 /** CSS variables for the task detail «operational state» select (dark enterprise UI). */
-export type DetailStageThemeVars = CSSProperties;
+export type DetailStageThemeVars = CSSProperties & Record<`--detail-stage-${string}`, string>;
 
 function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   let h = hex.trim().replace("#", "");

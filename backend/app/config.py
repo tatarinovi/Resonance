@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     default_admin_password: str = ""
     cors_origins: str = "http://localhost:5173,http://frontend"
     run_migrations_on_startup: bool = True
+    run_startup_digest_test: bool = False
 
     matrix_homeserver: str = "https://matrix.example.com"
     matrix_user_id: str = "@bot:example.com"

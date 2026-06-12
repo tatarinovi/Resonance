@@ -5,7 +5,7 @@ import asyncio
 import logging
 import os
 
-from fastapi import APIRouter, HTTPException, Query, status as http_status
+from fastapi import APIRouter, Header, HTTPException, status as http_status
 from fastapi.responses import StreamingResponse
 
 from ..deps import get_current_user_from_token
@@ -20,8 +20,12 @@ HEARTBEAT_SECONDS = int(os.getenv("STREAM_HEARTBEAT_SECONDS", "25"))
 
 @router.get("/stream")
 async def stream(
-    token: str = Query(..., description="Bearer JWT, passed as query string for EventSource compatibility"),
+    authorization: str | None = Header(default=None),
 ):
+    scheme, _, token = (authorization or "").partition(" ")
+    if scheme.lower() != "bearer" or not token.strip():
+        raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
+
     user = get_current_user_from_token(token)
     if user is None:
         raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token")

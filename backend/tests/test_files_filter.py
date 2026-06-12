@@ -25,6 +25,14 @@ def test_allows_image():
     assert _is_allowed("photo.png", "image/png")
 
 
+def test_rejects_svg_even_with_image_mime():
+    assert not _is_allowed("diagram.svg", "image/svg+xml")
+
+
+def test_rejects_octet_stream_without_known_extension():
+    assert not _is_allowed("blob.bin", "application/octet-stream")
+
+
 def test_allows_office_docx():
     assert _is_allowed(
         "doc.docx",

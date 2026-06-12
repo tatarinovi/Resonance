@@ -1,8 +1,10 @@
 # Standalone Configuration for Resonance
 
+# Legacy source-compose Caddyfile. Production uses deploy/production/Caddyfile.production.
+
 # --- Resonance Domain ---
-# Change this to your actual server domain
-resonance.tatarinovi.ru {
+# Change this to your actual server domain.
+resonance.example.internal {
     log {
         output stdout
     }
@@ -47,39 +49,7 @@ resonance.tatarinovi.ru {
 }
 
 # --- MinIO Administration Console ---
-# Change this to your MinIO console domain
-minio.tatarinovi.ru {
+# Change this to your MinIO console domain.
+minio.example.internal {
     reverse_proxy minio:9001
-}
-
-# --- Tatarinovi Main Site / Vizitka ---
-tatarinovi.ru {
-    encode gzip zstd
-
-    log {
-        output stdout
-    }
-
-    header {
-        X-Frame-Options "SAMEORIGIN"
-        X-Content-Type-Options "nosniff"
-        Referrer-Policy "strict-origin-when-cross-origin"
-    }
-
-    handle {
-        reverse_proxy vizitka:80 {
-            header_up Host {host}
-            header_up X-Real-IP {remote_host}
-            header_up X-Forwarded-For {remote_host}
-            header_up X-Forwarded-Proto {scheme}
-        }
-    }
-}
-
-ai.tatarinovi.ru {
-    log {
-        output stdout
-    }
-
-    reverse_proxy host.docker.internal:3000
 }

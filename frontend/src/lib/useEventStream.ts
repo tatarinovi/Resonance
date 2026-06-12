@@ -3,12 +3,11 @@
  * React Query cache invalidations. The hook is mounted once at the AppShell
  * level so a single connection is shared across the app.
  *
- * `EventSource` cannot send Authorization headers, so we pass the JWT as a
- * query string parameter; the backend accepts both. We use
- * `@microsoft/fetch-event-source` for richer reconnection semantics, falling
- * back to native `EventSource` if the dependency is unavailable.
+ * Native `EventSource` cannot send Authorization headers, so this hook uses
+ * `@microsoft/fetch-event-source` and keeps the JWT out of URLs and logs.
  */
 import { useEffect } from "react";
+import { fetchEventSource, type EventSourceMessage } from "@microsoft/fetch-event-source";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { tokenStorage } from "./api";
@@ -115,9 +114,7 @@ export function useEventStream(enabled: boolean) {
     const token = tokenStorage.get();
     if (!token) return;
 
-    const url = `/api/stream?token=${encodeURIComponent(token)}`;
-    let closed = false;
-    let source: EventSource | null = null;
+    const controller = new AbortController();
 
     function dispatch(type: string, raw: string) {
       let payload: unknown = null;
@@ -130,28 +127,23 @@ export function useEventStream(enabled: boolean) {
       if (handler) handler(qc)(payload);
     }
 
-    function connect() {
-      source = new EventSource(url);
-      Object.keys(TYPE_HANDLERS).forEach((type) => {
-        source?.addEventListener(type, (event) => dispatch(type, (event as MessageEvent).data));
-      });
-      source.addEventListener("ping", () => {
-        // heartbeat, ignore
-      });
-      source.addEventListener("error", () => {
-        if (closed) return;
-        source?.close();
-        setTimeout(() => {
-          if (!closed) connect();
-        }, 5000);
-      });
-    }
-
-    connect();
+    void fetchEventSource("/api/stream", {
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      onmessage(message: EventSourceMessage) {
+        if (!message.event || message.event === "ping") return;
+        dispatch(message.event, message.data);
+      },
+      onerror() {
+        if (controller.signal.aborted) return;
+        return 5000;
+      },
+    });
 
     return () => {
-      closed = true;
-      source?.close();
+      controller.abort();
     };
   }, [enabled, qc]);
 }

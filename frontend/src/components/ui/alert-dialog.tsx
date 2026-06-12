@@ -40,7 +40,7 @@ const AlertDialogContent = React.forwardRef<
       ref={ref}
       onOpenAutoFocus={(e) => {
         ensureLastPointerTracking()
-        const el = e.currentTarget
+        const el = e.currentTarget as HTMLElement
         const { x, y } = getLastPointerPosition()
         const { enterX, enterY } = computeDialogEnterOffset(x, y)
         el.style.setProperty("--dialog-enter-x", `${enterX}px`)

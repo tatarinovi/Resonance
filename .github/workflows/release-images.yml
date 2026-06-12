@@ -23,9 +23,135 @@ env:
   TRIVY_VERSION: 0.69.3
 
 jobs:
+  quality-gate:
+    name: Quality gate
+    runs-on: ubuntu-24.04
+    env:
+      JWT_SECRET: release-gate-jwt-secret-at-least-32-chars
+      DEFAULT_ADMIN_USERNAME: admin
+      DEFAULT_ADMIN_PASSWORD: adminadmin
+      DATABASE_URL: sqlite+pysqlite:///:memory:
+      RUN_MIGRATIONS_ON_STARTUP: "false"
+      RUN_STARTUP_DIGEST_TEST: "false"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends build-essential libolm-dev
+
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r backend/requirements.txt
+
+      - name: Run backend tests
+        working-directory: backend
+        run: python -m pytest
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20.19"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Test frontend
+        working-directory: frontend
+        run: npm run test:run
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Validate production compose
+        env:
+          ENV_FILE: .env.example
+        run: docker compose -f deploy/production/docker-compose.production.yml --env-file deploy/production/.env.example config >/tmp/resonance-compose.yml
+
+      - name: Secret scan
+        run: |
+          python - <<'PY'
+          import re
+          import subprocess
+          import sys
+
+          patterns = [
+              re.compile(r"AKIA[0-9A-Z]{16}"),
+              re.compile(r"ghp_[A-Za-z0-9_]{36,}"),
+              re.compile(r"github_pat_[A-Za-z0-9_]+"),
+              re.compile(r"xox[baprs]-[A-Za-z0-9-]+"),
+              re.compile(r"[0-9]{8,10}:[A-Za-z0-9_-]{35,}"),
+              re.compile(r"-----BEGIN (?:RSA|OPENSSH|EC|DSA|PRIVATE) KEY-----"),
+          ]
+          excluded_paths = {
+              "frontend/package-lock.json",
+              "package-lock.json",
+              "helps/v1.json",
+          }
+
+          def run(*args: str) -> str:
+              return subprocess.check_output(args, text=True, stderr=subprocess.DEVNULL)
+
+          findings: list[str] = []
+          files = run("git", "ls-files").splitlines()
+          for path in files:
+              if path in excluded_paths:
+                  continue
+              try:
+                  data = open(path, "rb").read().decode("utf-8", errors="ignore")
+              except OSError:
+                  continue
+              for line_no, line in enumerate(data.splitlines(), start=1):
+                  if any(p.search(line) for p in patterns):
+                      findings.append(f"{path}:{line_no}")
+
+          revs = run("git", "rev-list", "--all").splitlines()
+          for rev in revs:
+              for pattern in patterns:
+                  proc = subprocess.run(
+                      ["git", "grep", "-I", "-n", "-E", "-e", pattern.pattern, rev, "--", "."],
+                      text=True,
+                      stdout=subprocess.PIPE,
+                      stderr=subprocess.DEVNULL,
+                  )
+                  for line in proc.stdout.splitlines():
+                      if not any(f":{p}:" in line for p in excluded_paths):
+                          findings.append(line)
+
+          if findings:
+              print("Potential secrets found:")
+              print("\n".join(sorted(set(findings))[:200]))
+              sys.exit(1)
+          print("Secret scan passed.")
+          PY
+
   build-scan-sign:
     name: Build, scan, sign
     runs-on: ubuntu-24.04
+    needs: quality-gate
     strategy:
       fail-fast: false
       matrix:
