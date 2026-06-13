@@ -114,6 +114,7 @@ class TestRegister:
                 "username": "newuser",
                 "password": "pass123456",
                 "workspace": "ds",
+                "direction": "front",
             })
             assert resp.status_code == 201
             assert "message" in resp.json()
@@ -131,6 +132,7 @@ class TestRegister:
                 "username": "existing",
                 "password": "pass123456",
                 "workspace": "ds",
+                "direction": "front",
             })
             assert resp.status_code == 400
         finally:
@@ -143,6 +145,7 @@ class TestRegister:
                 "username": "ab",
                 "password": "pass123456",
                 "workspace": "ds",
+                "direction": "front",
             })
             assert resp.status_code == 400
         finally:
@@ -155,6 +158,7 @@ class TestRegister:
                 "username": "newuser",
                 "password": "12345",
                 "workspace": "ds",
+                "direction": "front",
             })
             assert resp.status_code == 400
         finally:
@@ -167,6 +171,7 @@ class TestRegister:
                 "username": "newuser",
                 "password": "pass123456",
                 "workspace": "ds",
+                "direction": "front",
             })
 
             with SessionLocal() as db:
