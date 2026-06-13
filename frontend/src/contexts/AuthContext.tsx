@@ -10,6 +10,25 @@ import { api, tokenStorage } from "@/lib/api";
 import type { ApiMe } from "@/lib/types";
 import { mapApiUserToRefUser, type RefUser } from "@/lib/mappers";
 
+const LOCAL_STORAGE_KEEP = new Set([
+  "resonance.theme",
+  "resonance.sidebarWidth",
+  "resonance:kanban-epic-worklog-density",
+]);
+
+function clearUserDataOnLogout(): void {
+  const keysToRemove: string[] = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && !LOCAL_STORAGE_KEEP.has(key)) {
+      keysToRemove.push(key);
+    }
+  }
+  for (const key of keysToRemove) {
+    localStorage.removeItem(key);
+  }
+}
+
 interface AuthContextValue {
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -109,9 +128,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(() => {
-    tokenStorage.clear();
+    qc.clear();
+    clearUserDataOnLogout();
     setMe(null);
-  }, []);
+  }, [qc]);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
