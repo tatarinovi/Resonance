@@ -1,18 +1,10 @@
 import { useState } from "react";
-import { Loader2, MessageSquare, Send } from "lucide-react";
-import { toast } from "sonner";
+import { MessageSquare } from "lucide-react";
 
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { FeedbackForm } from "@/components/feedback/FeedbackForm";
 import { ListPagination } from "@/components/shared/ListPagination";
-import { useCreateFeedback, useMyFeedback, type FeedbackStatus, type FeedbackType } from "@/lib/queries";
+import { useMyFeedback, type FeedbackStatus } from "@/lib/queries";
 import { formatDateTime } from "@/lib/formatDateTime";
-
-const TYPE_OPTIONS: Record<string, { label: string; backend: FeedbackType }> = {
-  "Баг": { label: "Баг", backend: "bug" },
-  "Предложение": { label: "Предложение", backend: "improvement" },
-  "Вопрос": { label: "Вопрос", backend: "improvement" },
-  "Другое": { label: "Другое", backend: "improvement" },
-};
 
 const STATUS_LABEL: Record<FeedbackStatus, string> = {
   new: "Новый",
@@ -33,38 +25,9 @@ const STATUS_COLOR: Record<FeedbackStatus, string> = {
 };
 
 export default function FeedbackPage() {
-  const [typeKey, setTypeKey] = useState("Баг");
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
   const [page, setPage] = useState(1);
   const pageSize = 25;
-  const create = useCreateFeedback();
   const myFeedback = useMyFeedback({ page, page_size: pageSize });
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim()) {
-      toast.error("Введите заголовок");
-      return;
-    }
-    if (!description.trim()) {
-      toast.error("Введите описание");
-      return;
-    }
-    try {
-      await create.mutateAsync({
-        type: TYPE_OPTIONS[typeKey].backend,
-        title: title.trim(),
-        description: description.trim(),
-      });
-      toast.success("Обратная связь отправлена");
-      setTitle("");
-      setDescription("");
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Не удалось отправить";
-      toast.error(message);
-    }
-  };
 
   const items = myFeedback.data?.items ?? [];
   const total = myFeedback.data?.total ?? 0;
@@ -78,53 +41,7 @@ export default function FeedbackPage() {
 
       <div className="bg-card border border-border rounded-xl p-5 mb-6">
         <h3 className="text-sm font-semibold text-foreground mb-4">Новая обратная связь</h3>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1.5">Тип *</label>
-              <Select value={typeKey} onValueChange={setTypeKey}>
-                <SelectTrigger className="text-sm" data-testid="select-feedback-type">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.keys(TYPE_OPTIONS).map((t) => (
-                    <SelectItem key={t} value={t}>
-                      {t}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1.5">Заголовок *</label>
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder="Кратко"
-                className="w-full px-3 py-2 text-sm bg-background border border-input rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1.5">Описание *</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Подробности, шаги для воспроизведения, ожидаемое поведение..."
-              rows={4}
-              className="w-full px-3 py-2.5 text-sm bg-background border border-input rounded-lg resize-none focus:outline-none focus:ring-1 focus:ring-primary/50 placeholder:text-muted-foreground"
-              data-testid="textarea-feedback"
-            />
-          </div>
-          <button
-            type="submit"
-            disabled={create.isPending}
-            className="flex items-center gap-1.5 px-4 py-2 bg-primary text-primary-foreground text-sm font-medium rounded-md hover:bg-primary/90 transition-colors disabled:opacity-70"
-            data-testid="button-submit-feedback"
-          >
-            {create.isPending ? <Loader2 size={13} className="animate-spin" /> : <Send size={13} />} Отправить
-          </button>
-        </form>
+        <FeedbackForm />
       </div>
 
       <div className="bg-card border border-border rounded-xl p-5">

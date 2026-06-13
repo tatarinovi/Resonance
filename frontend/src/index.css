@@ -206,32 +206,6 @@
   }
 }
 
-/* Модальные окна: въезд от стороны курсора. Центрирование — на flex-обёртке Content;
-   здесь только px-смещение: в keyframes % от размеров самого элемента ломали позицию. */
-@keyframes dialog-pointer-enter {
-  from {
-    opacity: 0;
-    transform: translate(var(--dialog-enter-x, 0px), var(--dialog-enter-y, 0px))
-      scale(0.94);
-  }
-  to {
-    opacity: 1;
-    transform: translate(0, 0) scale(1);
-  }
-}
-
-.group[data-state="open"] .animate-dialog-pointer-enter {
-  animation: dialog-pointer-enter 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .group[data-state="open"] .animate-dialog-pointer-enter {
-    animation: none;
-    opacity: 1;
-    transform: none;
-  }
-}
-
 @layer utilities {
   input[type="search"]::-webkit-search-cancel-button {
     @apply hidden;

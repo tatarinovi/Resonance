@@ -1,7 +1,11 @@
-﻿import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation as useWouterLocation, Link } from "@/lib/router";
 import { useLocation as useRouterLocation } from "react-router-dom";
-import { Search, ChevronRight, LogOut, Menu, Settings, User, X } from "lucide-react";
+import { ChevronRight, LogOut, Menu, Search, Settings, User } from "lucide-react";
+
+import { CommandMenu } from "@/components/layout/CommandMenu";
+import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
+import { CreateQuestionDialog } from "@/components/questions/CreateQuestionDialog";
 import { NotificationBell } from "@/components/shared/NotificationCenter";
 import { RoleSwitcher } from "@/components/shared/RoleSwitcher";
 import {
@@ -14,7 +18,6 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAuth } from "@/contexts/AuthContext";
 import { useRole } from "@/contexts/RoleContext";
-import { questions } from "@/data/questions";
 import { epics } from "@/data/epics";
 import { projects } from "@/data/projects";
 import type { RealtimeStatus } from "@/lib/useEventStream";
@@ -39,11 +42,11 @@ function Breadcrumb() {
   const routerLoc = useRouterLocation();
 
   if (location === "/admin/kanban/projects") {
-    return <span className="text-sm font-medium text-foreground truncate">Kanban проекты</span>;
+    return <span className="truncate text-sm font-medium text-foreground">Kanban проекты</span>;
   }
 
   if (location === "/admin/kanban/team-roles") {
-    return <span className="text-sm font-medium text-foreground truncate">Kanban — роли команды</span>;
+    return <span className="truncate text-sm font-medium text-foreground">Kanban - роли команды</span>;
   }
 
   if (location.startsWith("/admin/kanban/projects/") && location !== "/admin/kanban/projects") {
@@ -55,11 +58,11 @@ function Breadcrumb() {
       return (
         <div className="flex min-w-0 items-center gap-1 text-sm">
           <Link href="/admin/kanban/projects">
-            <span className="cursor-pointer text-muted-foreground hover:text-foreground hidden sm:inline">Kanban проекты</span>
+            <span className="hidden cursor-pointer text-muted-foreground hover:text-foreground sm:inline">Kanban проекты</span>
           </Link>
           <ChevronRight size={14} className="hidden shrink-0 text-muted-foreground/50 sm:block" />
           <Link href="/admin/kanban/team-roles">
-            <span className="cursor-pointer text-muted-foreground hover:text-foreground hidden sm:inline">Роли</span>
+            <span className="hidden cursor-pointer text-muted-foreground hover:text-foreground sm:inline">Роли</span>
           </Link>
           <ChevronRight size={14} className="hidden shrink-0 text-muted-foreground/50 sm:block" />
           <span className="truncate font-medium text-foreground" title={slug}>
@@ -73,7 +76,7 @@ function Breadcrumb() {
     return (
       <div className="flex min-w-0 items-center gap-1 text-sm">
         <Link href="/admin/kanban/projects">
-          <span className="cursor-pointer text-muted-foreground hover:text-foreground hidden sm:inline">Kanban проекты</span>
+          <span className="hidden cursor-pointer text-muted-foreground hover:text-foreground sm:inline">Kanban проекты</span>
         </Link>
         <ChevronRight size={14} className="hidden shrink-0 text-muted-foreground/50 sm:block" />
         <span className="truncate font-medium text-foreground" title={slug}>
@@ -85,48 +88,47 @@ function Breadcrumb() {
 
   if (location.startsWith("/questions/") && location !== "/questions/") {
     const id = location.split("/")[2];
-    const q = questions.find(q => q.id === id);
     return (
-      <div className="flex items-center gap-1 text-sm min-w-0">
+      <div className="flex min-w-0 items-center gap-1 text-sm">
         <Link href="/questions">
-          <span className="text-muted-foreground hover:text-foreground cursor-pointer hidden sm:inline">Вопросы</span>
+          <span className="hidden cursor-pointer text-muted-foreground hover:text-foreground sm:inline">Вопросы</span>
         </Link>
-        <ChevronRight size={14} className="text-muted-foreground/50 hidden sm:block" />
-        <span className="text-foreground font-medium truncate">{q?.id ?? id}</span>
+        <ChevronRight size={14} className="hidden text-muted-foreground/50 sm:block" />
+        <span className="truncate font-medium text-foreground">{id}</span>
       </div>
     );
   }
 
   if (location.startsWith("/epics/") && location !== "/epics/") {
     const id = location.split("/")[2];
-    const e = epics.find(e => e.id === id);
+    const epic = epics.find((item) => item.id === id);
     return (
-      <div className="flex items-center gap-1 text-sm min-w-0">
+      <div className="flex min-w-0 items-center gap-1 text-sm">
         <Link href="/epics">
-          <span className="text-muted-foreground hover:text-foreground cursor-pointer hidden sm:inline">Эпики</span>
+          <span className="hidden cursor-pointer text-muted-foreground hover:text-foreground sm:inline">Эпики</span>
         </Link>
-        <ChevronRight size={14} className="text-muted-foreground/50 hidden sm:block" />
-        <span className="text-foreground font-medium truncate">{e?.id ?? id}</span>
+        <ChevronRight size={14} className="hidden text-muted-foreground/50 sm:block" />
+        <span className="truncate font-medium text-foreground">{epic?.id ?? id}</span>
       </div>
     );
   }
 
   if (location.startsWith("/projects/") && location !== "/projects/") {
     const id = location.split("/")[2];
-    const p = projects.find(p => p.id === id);
+    const project = projects.find((item) => item.id === id);
     return (
-      <div className="flex items-center gap-1 text-sm min-w-0">
+      <div className="flex min-w-0 items-center gap-1 text-sm">
         <Link href="/projects">
-          <span className="text-muted-foreground hover:text-foreground cursor-pointer hidden sm:inline">Проекты</span>
+          <span className="hidden cursor-pointer text-muted-foreground hover:text-foreground sm:inline">Проекты</span>
         </Link>
-        <ChevronRight size={14} className="text-muted-foreground/50 hidden sm:block" />
-        <span className="text-foreground font-medium truncate">{p?.name ?? id}</span>
+        <ChevronRight size={14} className="hidden text-muted-foreground/50 sm:block" />
+        <span className="truncate font-medium text-foreground">{project?.name ?? id}</span>
       </div>
     );
   }
 
   const label = routeLabels[location] ?? "Resonance";
-  return <h1 className="text-sm font-semibold text-foreground truncate">{label}</h1>;
+  return <h1 className="truncate text-sm font-semibold text-foreground">{label}</h1>;
 }
 
 interface HeaderProps {
@@ -173,7 +175,7 @@ export function RealtimeStatusIndicator({ status }: { status: RealtimeStatus }) 
             tabIndex={0}
           >
             <span className={`h-2 w-2 rounded-full ${meta.dotClassName}`} aria-hidden="true" />
-            {meta.showLiveLabel && <span className="hidden md:inline text-emerald-700 dark:text-emerald-300">Live</span>}
+            {meta.showLiveLabel && <span className="hidden text-emerald-700 md:inline dark:text-emerald-300">Live</span>}
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="end">
@@ -187,28 +189,21 @@ export function RealtimeStatusIndicator({ status }: { status: RealtimeStatus }) 
 export function Header({ onMenuClick, realtimeStatus }: HeaderProps) {
   const { currentUser } = useRole();
   const { logout } = useAuth();
-  const [search, setSearch] = useState("");
-  const [searchOpen, setSearchOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [createQuestionOpen, setCreateQuestionOpen] = useState(false);
+  const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [, setLocation] = useWouterLocation();
 
-  const filtered = search.length > 1
-    ? [
-        ...questions
-          .filter(q => q.title.toLowerCase().includes(search.toLowerCase()))
-          .slice(0, 3)
-          .map(q => ({ type: "q", id: q.id, label: q.title })),
-        ...epics
-          .filter(e => e.name.toLowerCase().includes(search.toLowerCase()))
-          .slice(0, 2)
-          .map(e => ({ type: "e", id: e.id, label: e.name })),
-      ]
-    : [];
-
-  const handleSearchSelect = (item: { type: string; id: string }) => {
-    setSearch("");
-    setSearchOpen(false);
-    setLocation(item.type === "q" ? `/questions/${item.id}` : `/epics/${item.id}`);
-  };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.code === "KeyK") {
+        event.preventDefault();
+        setCommandOpen((value) => !value);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const handleLogout = () => {
     logout();
@@ -216,90 +211,40 @@ export function Header({ onMenuClick, realtimeStatus }: HeaderProps) {
   };
 
   return (
-    <header className="h-[52px] flex items-center gap-2 px-3 md:px-4 border-b border-border bg-card/50 backdrop-blur-sm flex-shrink-0">
-      {/* Hamburger — mobile only */}
+    <header className="flex h-[52px] flex-shrink-0 items-center gap-2 border-b border-border bg-card/50 px-3 backdrop-blur-sm md:px-4">
       <button
         onClick={onMenuClick}
-        className="md:hidden p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors flex-shrink-0"
+        className="flex-shrink-0 rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:hidden"
         data-testid="button-menu"
         aria-label="Меню"
       >
         <Menu size={18} />
       </button>
 
-      {/* Breadcrumb */}
-      <div className="flex-1 min-w-0">
+      <div className="min-w-0 flex-1">
         <Breadcrumb />
       </div>
 
-      {/* Desktop search */}
-      <div className="relative w-56 lg:w-64 hidden md:block">
-        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="search"
-          placeholder="Поиск вопросов, эпиков..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-          className="w-full pl-8 pr-3 py-1.5 text-xs bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-          data-testid="input-global-search"
-        />
-        {filtered.length > 0 && (
-          <div className="absolute top-full mt-1 w-full bg-popover border border-border rounded-md shadow-lg z-50 overflow-hidden">
-            {filtered.map(item => (
-              <button
-                key={item.id}
-                className="w-full text-left px-3 py-2 text-xs hover:bg-accent transition-colors flex items-center gap-2"
-                onClick={() => handleSearchSelect(item)}
-                data-testid={`search-result-${item.id}`}
-              >
-                <span className="text-[10px] text-muted-foreground font-mono">{item.id}</span>
-                <span className="truncate text-foreground">{item.label}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
+      <button
+        type="button"
+        onClick={() => setCommandOpen(true)}
+        className="hidden h-9 w-[280px] items-center gap-2 rounded-md border border-border bg-background px-3 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:flex xl:w-[360px]"
+        data-testid="button-command-menu"
+      >
+        <span className="min-w-0 flex-1 truncate">⌘  Поиск, переход или команда...</span>
+      </button>
 
-      {/* Mobile search button + overlay */}
-      <div className="md:hidden relative">
-        <button
-          onClick={() => setSearchOpen(v => !v)}
-          className="p-1.5 rounded-md text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
-          data-testid="button-mobile-search"
-        >
-          {searchOpen ? <X size={17} /> : <Search size={17} />}
-        </button>
+      <button
+        type="button"
+        onClick={() => setCommandOpen(true)}
+        className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground md:hidden"
+        data-testid="button-mobile-command-menu"
+        aria-label="Открыть поиск и команды"
+      >
+        <Search size={17} />
+      </button>
 
-        {searchOpen && (
-          <div className="absolute right-0 top-full mt-1 w-64 z-50 bg-popover border border-border rounded-md shadow-xl p-2">
-            <input
-              type="search"
-              placeholder="Поиск..."
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              autoFocus
-              className="w-full px-3 py-2 text-sm bg-background border border-border rounded-md text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-            />
-            {filtered.length > 0 && (
-              <div className="mt-1">
-                {filtered.map(item => (
-                  <button
-                    key={item.id}
-                    className="w-full text-left px-3 py-2 text-xs hover:bg-accent rounded-md transition-colors flex items-center gap-2"
-                    onClick={() => handleSearchSelect(item)}
-                  >
-                    <span className="text-[10px] text-muted-foreground font-mono">{item.id}</span>
-                    <span className="truncate text-foreground">{item.label}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Right side */}
-      <div className="flex items-center gap-1 flex-shrink-0 min-w-0">
+      <div className="flex min-w-0 flex-shrink-0 items-center gap-1">
         <div className="min-w-0 max-w-[min(280px,52vw)] sm:max-w-none">
           <RoleSwitcher />
         </div>
@@ -341,6 +286,15 @@ export function Header({ onMenuClick, realtimeStatus }: HeaderProps) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
+
+      <CommandMenu
+        open={commandOpen}
+        onOpenChange={setCommandOpen}
+        onCreateQuestion={() => setCreateQuestionOpen(true)}
+        onOpenFeedback={() => setFeedbackOpen(true)}
+      />
+      <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
+      <CreateQuestionDialog open={createQuestionOpen} onOpenChange={setCreateQuestionOpen} />
     </header>
   );
 }

@@ -57,6 +57,12 @@ export function AppShell({ children }: AppShellProps) {
     }
   }, []);
 
+  const applySidebarWidth = useCallback((width: number, persist = false) => {
+    const clamped = clampSidebarWidth(width);
+    setSidebarWidth(clamped);
+    if (persist) persistSidebarWidth(clamped);
+  }, []);
+
   const endResizeDrag = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
     const d = dragRef.current;
     if (!d || d.pointerId !== e.pointerId) return;
@@ -67,9 +73,8 @@ export function AppShell({ children }: AppShellProps) {
     }
     const clientX = e.type === "pointercancel" ? lastPointerXRef.current : e.clientX;
     const w = clampSidebarWidth(d.startW + (clientX - d.startX));
-    setSidebarWidth(w);
-    persistSidebarWidth(w);
-  }, []);
+    applySidebarWidth(w, true);
+  }, [applySidebarWidth]);
 
   const onResizePointerDown = useCallback((e: React.PointerEvent<HTMLButtonElement>) => {
     e.preventDefault();
@@ -84,8 +89,8 @@ export function AppShell({ children }: AppShellProps) {
       return;
     }
     lastPointerXRef.current = e.clientX;
-    setSidebarWidth(clampSidebarWidth(d.startW + (e.clientX - d.startX)));
-  }, []);
+    applySidebarWidth(d.startW + (e.clientX - d.startX));
+  }, [applySidebarWidth]);
 
   const onResizeDoubleClick = useCallback(() => {
     setSidebarWidth(SIDEBAR_DEFAULT);

@@ -3,11 +3,6 @@ import * as AlertDialogPrimitive from "@radix-ui/react-alert-dialog"
 
 import { cn } from "@/lib/utils"
 import { buttonVariants } from "@/components/ui/button"
-import {
-  computeDialogEnterOffset,
-  ensureLastPointerTracking,
-  getLastPointerPosition,
-} from "@/lib/lastPointer"
 
 const AlertDialog = AlertDialogPrimitive.Root
 
@@ -33,20 +28,13 @@ AlertDialogOverlay.displayName = AlertDialogPrimitive.Overlay.displayName
 const AlertDialogContent = React.forwardRef<
   React.ElementRef<typeof AlertDialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof AlertDialogPrimitive.Content>
->(({ className, onOpenAutoFocus, children, ...props }, ref) => (
+>(({ className, children, ...props }, ref) => (
   <AlertDialogPortal>
-    <AlertDialogOverlay />
+    <AlertDialogPrimitive.Cancel asChild>
+      <AlertDialogOverlay />
+    </AlertDialogPrimitive.Cancel>
     <AlertDialogPrimitive.Content
       ref={ref}
-      onOpenAutoFocus={(e) => {
-        ensureLastPointerTracking()
-        const el = e.currentTarget as HTMLElement
-        const { x, y } = getLastPointerPosition()
-        const { enterX, enterY } = computeDialogEnterOffset(x, y)
-        el.style.setProperty("--dialog-enter-x", `${enterX}px`)
-        el.style.setProperty("--dialog-enter-y", `${enterY}px`)
-        onOpenAutoFocus?.(e)
-      }}
       className={cn(
         "group fixed inset-0 z-50 flex min-h-full items-center justify-center overflow-y-auto p-4 pointer-events-none outline-none",
       )}
@@ -55,8 +43,8 @@ const AlertDialogContent = React.forwardRef<
       <div
         className={cn(
           "pointer-events-auto grid w-full max-w-lg gap-4 border bg-background p-6 shadow-lg sm:rounded-lg",
-          "group-data-[state=closed]:animate-out group-data-[state=closed]:fade-out-0 group-data-[state=closed]:zoom-out-95 group-data-[state=closed]:duration-200",
-          "animate-dialog-pointer-enter",
+          "group-data-[state=open]:animate-in group-data-[state=open]:fade-in-0 group-data-[state=open]:duration-100",
+          "group-data-[state=closed]:animate-out group-data-[state=closed]:fade-out-0 group-data-[state=closed]:duration-75",
           className,
         )}
       >
