@@ -223,12 +223,15 @@ def _ticket_read_for_viewer(db: Session, ticket: Ticket, viewer: User) -> Ticket
     )
 
 
+_TICKET_DATA_CLIENT_WRITABLE_KEYS = frozenset()
+
+
 def _merge_ticket_data_json(ticket: Ticket, incoming: dict[str, Any]) -> None:
     if not incoming:
         return
     merged = (ticket.data_json or {}).copy()
     for k, v in incoming.items():
-        if k in {"thread", "new_thread_message", "history", "clear_reopen_submission", "reopened_to_author"}:
+        if k not in _TICKET_DATA_CLIENT_WRITABLE_KEYS:
             continue
         merged[k] = v
     ticket.data_json = merged
@@ -711,7 +714,7 @@ def get_ticket_allowed_status_transitions(
 
     author_name = _ticket_author_label(ticket)
     return _allowed_ticket_target_statuses(
-        user=user, author_name=author_name, old_status=ticket.status, assignee_id=ticket.assignee_id
+        user=user, author_name=author_name, author_id=ticket.author_id, old_status=ticket.status, assignee_id=ticket.assignee_id
     )
 
 
@@ -1017,12 +1020,18 @@ async def update_ticket(
         field_changes.append(("priority", ticket.priority, payload.priority.value))
         ticket.priority = payload.priority.value
     if payload.sla_hours is not None and payload.sla_hours != ticket.sla_hours:
+        if user.role != UserRole.ADMIN and not is_coordinator_role(user):
+            raise HTTPException(status_code=403, detail="Only coordinator or admin can change SLA hours")
         field_changes.append(("sla_hours", ticket.sla_hours, payload.sla_hours))
         ticket.sla_hours = payload.sla_hours
     if payload.due_at is not None and payload.due_at != ticket.due_at:
+        if user.role != UserRole.ADMIN and not is_coordinator_role(user):
+            raise HTTPException(status_code=403, detail="Only coordinator or admin can change due date")
         field_changes.append(("due_at", ticket.due_at, payload.due_at))
         ticket.due_at = payload.due_at
     if payload.epic_id is not None and payload.epic_id != ticket.epic_id:
+        if user.role != UserRole.ADMIN and not is_coordinator_role(user):
+            raise HTTPException(status_code=403, detail="Only coordinator or admin can change epic")
         field_changes.append(("epic_id", ticket.epic_id, payload.epic_id))
         ticket.epic_id = payload.epic_id
 
@@ -1188,21 +1197,13 @@ async def create_ticket(
 # --- Messages and attachments sub-routes ---
 
 
-def _check_ticket_access(db: Session, ticket: Ticket, user: User) -> None:
-    if user.role != UserRole.ADMIN and ticket.project_id not in {p.id for p in user.projects}:
-        raise HTTPException(status_code=403, detail="Access denied to this ticket")
-
-
 @router.get("/tickets/{ticket_id}/messages", response_model=list[MessageRead])
 def list_messages(
     ticket_id: int,
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[MessageRead]:
-    ticket = db.scalar(_ticket_query().where(Ticket.id == ticket_id))
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    _check_ticket_access(db, ticket, user)
+    ticket = _get_ticket_if_visible(db, ticket_id, user)
     return [_message_to_read(m) for m in ticket.messages]
 
 
@@ -1217,10 +1218,7 @@ async def create_message(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> MessageRead:
-    ticket = db.scalar(_ticket_query().where(Ticket.id == ticket_id))
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    _check_ticket_access(db, ticket, user)
+    ticket = _get_ticket_if_visible(db, ticket_id, user)
 
     op_ctx = ensure_operation_context(db, actor_id=user.id, command_type="create_ticket_message")
     op_ctx_id = op_ctx.id if op_ctx else None
@@ -1344,10 +1342,7 @@ def list_attachments(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list[TicketAttachment]:
-    ticket = db.scalar(_ticket_query().where(Ticket.id == ticket_id))
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    _check_ticket_access(db, ticket, user)
+    ticket = _get_ticket_if_visible(db, ticket_id, user)
     return ticket.attachments
 
 
@@ -1362,10 +1357,7 @@ def create_attachment(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> AttachmentRead:
-    ticket = db.scalar(_ticket_query().where(Ticket.id == ticket_id))
-    if not ticket:
-        raise HTTPException(status_code=404, detail="Ticket not found")
-    _check_ticket_access(db, ticket, user)
+    ticket = _get_ticket_if_visible(db, ticket_id, user)
 
     if not (payload.url or "").strip():
         raise HTTPException(status_code=422, detail="Attachment URL is required")

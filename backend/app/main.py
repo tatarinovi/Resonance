@@ -3,7 +3,7 @@ import logging
 import sys
 import traceback
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from .bootstrap import bootstrap_database
@@ -37,7 +37,7 @@ logger = logging.getLogger("matrix-hub")
 poll_logger = logging.getLogger(__name__)
 
 settings = get_settings()
-app = FastAPI(title=settings.app_name)
+app = FastAPI(title=settings.app_name, openapi_url=f"{settings.api_prefix}/openapi.json")
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -84,6 +84,23 @@ async def on_startup() -> None:
 @app.get("/health")
 def healthcheck() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/docs", include_in_schema=False)
+async def scalar_docs():
+    html = """<!doctype html>
+<html>
+<head>
+  <title>Resonance API — Scalar</title>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+</head>
+<body>
+  <script id="api-reference" data-url="/api/openapi.json"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+</body>
+</html>"""
+    return HTMLResponse(content=html)
 
 
 app.include_router(auth.router, prefix=settings.api_prefix)
