@@ -1,4 +1,6 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it, vi } from "vitest";
 
@@ -34,10 +36,13 @@ vi.mock("@/components/shared/UserAvatar", () => ({
 }));
 
 function renderHeader(status: RealtimeStatus) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter initialEntries={["/"]}>
-      <Header onMenuClick={() => undefined} realtimeStatus={status} />
-    </MemoryRouter>,
+    <QueryClientProvider client={qc}>
+      <MemoryRouter initialEntries={["/"]}>
+        <Header onMenuClick={() => undefined} realtimeStatus={status} />
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 
@@ -73,12 +78,15 @@ describe("RealtimeStatusIndicator", () => {
 });
 
 describe("Header realtime status", () => {
-  it("renders the realtime indicator and actions from the avatar menu", () => {
+  it("renders the realtime indicator and actions from the avatar menu", async () => {
+    const user = userEvent.setup();
     renderHeader("offline");
 
-    fireEvent.click(screen.getByTestId("button-profile-menu"));
+    await user.click(screen.getByTestId("button-profile-menu"));
 
-    expect(screen.getByTestId("realtime-status")).toHaveAttribute("aria-label", "Realtime не используется");
+    await waitFor(() => {
+      expect(screen.getByTestId("realtime-status")).toHaveAttribute("aria-label", "Realtime не используется");
+    });
     expect(screen.getByText("Профиль")).toBeInTheDocument();
     expect(screen.getByText("Настройки")).toBeInTheDocument();
     expect(screen.getByText("Выйти")).toBeInTheDocument();

@@ -90,6 +90,7 @@
     "@fontsource-variable/outfit": "^5.2.8",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.2.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/dompurify": "^3.0.5",
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.20",
