@@ -6,7 +6,6 @@ import {
   useAdminDashboardPersona,
 } from "@/contexts/AdminDashboardPersonaContext";
 import { useRole } from "@/contexts/RoleContext";
-import { activityEvents } from "@/data/activity";
 import { epics } from "@/data/epics";
 import { questions } from "@/data/questions";
 import { useDataBridgeVersion } from "@/data/users";
@@ -109,47 +108,36 @@ function EpicBlockerLine({ epic }: { epic: typeof epics[0] }) {
   );
 }
 
-function ActivityLine({ event }: { event: typeof activityEvents[0] }) {
-  const href = event.targetType === "epic" ? `/epics/${event.targetId}` : `/questions/${event.targetId}`;
-  return (
-    <Link href={href}>
-      <div className="flex items-center gap-2 rounded-md px-2 py-2 transition-colors hover:bg-accent/45">
-        <span className="w-16 shrink-0 font-mono text-[11px] text-muted-foreground">{event.targetId}</span>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm text-foreground">{event.targetTitle}</p>
-          <p className="truncate text-xs text-muted-foreground">{event.action}</p>
-        </div>
-      </div>
-    </Link>
-  );
-}
-
 function buildRoleQueues(role: RefRole, userId: string) {
   const openQuestions = questions.filter((q) => !CLOSED_STATUSES.has(q.status));
   const staleQuestions = openQuestions
     .filter((q) => hoursSinceUpdated(q.updatedAt) > 24)
     .sort((a, b) => hoursSinceUpdated(b.updatedAt) - hoursSinceUpdated(a.updatedAt));
-  const myQuestions = openQuestions.filter((q) => q.assigneeId === userId || q.authorId === userId);
+  const assignedQuestions = openQuestions.filter((q) => q.assigneeId === userId);
+  const authoredQuestions = openQuestions.filter((q) => q.authorId === userId && q.assigneeId !== userId);
   const expertQueue = openQuestions.filter((q) => q.status === "У эксперта");
   const waitingQueue = openQuestions.filter((q) => q.status === "Ожидает автора" || q.status === "На уточнении");
 
   if (role === "Эксперт") {
     return {
       attention: expertQueue.length ? expertQueue : staleQuestions,
-      mine: myQuestions.length ? myQuestions : expertQueue,
+      action: assignedQuestions,
+      watch: authoredQuestions,
     };
   }
 
   if (role === "Админ" || role === "Координатор") {
     return {
       attention: [...waitingQueue, ...staleQuestions].slice(0, 12),
-      mine: myQuestions.length ? myQuestions : openQuestions,
+      action: assignedQuestions,
+      watch: authoredQuestions,
     };
   }
 
   return {
-    attention: myQuestions.length ? myQuestions : staleQuestions,
-    mine: myQuestions,
+    attention: assignedQuestions.length ? assignedQuestions : staleQuestions,
+    action: assignedQuestions,
+    watch: authoredQuestions,
   };
 }
 
@@ -158,10 +146,10 @@ export default function DashboardPage() {
   const { currentUser } = useRole();
   const [createQuestionOpen, setCreateQuestionOpen] = useState(false);
   const personaCtx = useAdminDashboardPersona();
-  const effectiveRole: RefRole = personaCtx?.persona ?? currentUser.role;
+  const canSwitchPersona = currentUser.role === "Админ" && personaCtx != null;
+  const effectiveRole: RefRole = canSwitchPersona ? (personaCtx.persona ?? currentUser.role) : currentUser.role;
   const queues = buildRoleQueues(effectiveRole, currentUser.id);
   const blockers = epics.filter((epic) => epic.blockers.length > 0).slice(0, 6);
-  const recentActivity = activityEvents.slice(0, 8);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -182,7 +170,7 @@ export default function DashboardPage() {
           <h1 className="text-lg font-semibold text-foreground">Рабочий стол</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">{getDashboardGreeting(currentUser.name)}</p>
         </div>
-        {personaCtx ? (
+        {canSwitchPersona ? (
           <div className="flex shrink-0 items-center gap-1.5" data-testid="dashboard-admin-persona-tools">
             <span className="hidden text-[10px] text-muted-foreground sm:inline">Вид</span>
             <Select value={effectiveRole} onValueChange={(value) => personaCtx.setPersona(value as RefRole)}>
@@ -214,22 +202,22 @@ export default function DashboardPage() {
         </Section>
 
         <Section title="Моя очередь" icon={HelpCircle} href="/questions?view=mine">
-          {queues.mine.slice(0, 6).length ? (
-            queues.mine.slice(0, 6).map((q) => <QuestionLine key={q.id} q={q} />)
+          {queues.action.slice(0, 6).length ? (
+            queues.action.slice(0, 6).map((q) => <QuestionLine key={q.id} q={q} />)
           ) : (
             <EmptyLine>В вашей очереди сейчас пусто.</EmptyLine>
           )}
         </Section>
 
-        <Section title="Последние изменения" icon={Clock} href="/activity">
-          {recentActivity.length ? (
-            recentActivity.map((event) => <ActivityLine key={event.id} event={event} />)
+        <Section title="На контроле" icon={Clock} href="/questions">
+          {queues.watch.slice(0, 6).length ? (
+            queues.watch.slice(0, 6).map((q) => <QuestionLine key={q.id} q={q} />)
           ) : (
-            <EmptyLine>Пока нет активности.</EmptyLine>
+            <EmptyLine>Нет открытых вопросов, где вы автор.</EmptyLine>
           )}
         </Section>
 
-        <Section title="Блокеры" icon={Layers} href="/questions?view=blocked">
+        <Section title="Блокеры эпиков" icon={Layers} href="/epics">
           {blockers.length ? (
             blockers.map((epic) => <EpicBlockerLine key={epic.id} epic={epic} />)
           ) : (
