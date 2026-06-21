@@ -3,7 +3,7 @@ FROM golang:1.26.4-alpine AS builder
 RUN apk add --no-cache git
 
 WORKDIR /src
-RUN git clone --depth 1 --branch v2.11.3 https://github.com/caddyserver/caddy.git . \
+RUN git clone --depth 1 --branch v2.11.4 https://github.com/caddyserver/caddy.git . \
     && go mod edit -require=github.com/go-jose/go-jose/v3@v3.0.5 \
     && go mod tidy \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /usr/bin/caddy ./cmd/caddy
