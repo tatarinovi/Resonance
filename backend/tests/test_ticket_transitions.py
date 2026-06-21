@@ -70,6 +70,18 @@ def test_assignee_can_answer_forwarded_without_expert_utils() -> None:
     )
 
 
+def test_assignee_can_return_forwarded_for_clarification() -> None:
+    u = _user(UserRole.EMPLOYEE, "qalead", "qa")
+    u.id = 42
+    assert _is_ticket_transition_allowed(
+        user=u,
+        author_name="bob",
+        old_status=TicketStatus.FORWARDED,
+        new_status=TicketStatus.RETURNED,
+        assignee_id=42,
+    )
+
+
 def test_non_assignee_employee_cannot_answer_if_not_expert() -> None:
     u = _user(UserRole.EMPLOYEE, "other", "qa")
     u.id = 1

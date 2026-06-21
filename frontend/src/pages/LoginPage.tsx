@@ -70,7 +70,7 @@ export default function LoginPage() {
         <div className="flex flex-col items-center mb-8">
           <img src="/sidebar-logo.png" alt="Resonance" className="w-12 h-12 rounded-2xl mb-4 object-cover" />
           <h1 className="text-xl font-semibold text-foreground">Resonance</h1>
-          <p className="text-sm text-muted-foreground mt-1">Операционная рабочая среда</p>
+          <p className="text-sm text-muted-foreground mt-1">Вопросы, ответы и знания команды в одном месте</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-6 shadow-lg">
           <form onSubmit={handleLogin} className="space-y-4">
