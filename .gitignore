@@ -2,6 +2,9 @@
 .env
 .env.*
 !.env.example
+.mimocode/
+.agents/
+docs/
 
 # --- Python ---
 __pycache__/
