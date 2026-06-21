@@ -29,7 +29,7 @@
         reverse_proxy minio:9000
     }
 
-    @static path /assets/* /favicon.ico /robots.txt
+    @static path /assets/* /favicon.ico /favicon.svg /favicon-512.png /sidebar-logo.png /robots.txt
     handle @static {
         reverse_proxy frontend:8080
     }

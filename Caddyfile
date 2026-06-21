@@ -36,7 +36,7 @@ resonance.example.internal {
     }
 
     # Vite build assets and root static files (must bypass SPA rewrite)
-    @resonanceStatic path /assets/* /favicon.ico /robots.txt
+    @resonanceStatic path /assets/* /favicon.ico /favicon.svg /favicon-512.png /sidebar-logo.png /robots.txt
     handle @resonanceStatic {
         reverse_proxy frontend:80
     }

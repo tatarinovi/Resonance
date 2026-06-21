@@ -1,6 +1,6 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { AlertTriangle, Radio, Eye, EyeOff, Loader2 } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -68,9 +68,7 @@ export default function LoginPage() {
     <div className="min-h-screen bg-background flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center mb-4">
-            <Radio size={22} className="text-white" />
-          </div>
+          <img src="/sidebar-logo.png" alt="Resonance" className="w-12 h-12 rounded-2xl mb-4 object-cover" />
           <h1 className="text-xl font-semibold text-foreground">Resonance</h1>
           <p className="text-sm text-muted-foreground mt-1">Операционная рабочая среда</p>
         </div>

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { AlertTriangle, Loader2, Radio } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -69,9 +69,7 @@ export default function RegisterPage() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center px-4">
         <div className="max-w-sm w-full bg-card border border-border rounded-xl p-6 text-center shadow-lg">
-          <div className="w-12 h-12 mx-auto rounded-2xl bg-primary flex items-center justify-center mb-4">
-            <Radio size={22} className="text-white" />
-          </div>
+          <img src="/sidebar-logo.png" alt="Resonance" className="w-12 h-12 mx-auto rounded-2xl mb-4 object-cover" />
           <h2 className="text-base font-semibold text-foreground">Заявка отправлена</h2>
           <p className="text-sm text-muted-foreground mt-2">
             Дождитесь подтверждения вашей учётной записи администратором.
@@ -92,9 +90,7 @@ export default function RegisterPage() {
     <div className="min-h-screen bg-background flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-primary flex items-center justify-center mb-4">
-            <Radio size={22} className="text-white" />
-          </div>
+          <img src="/sidebar-logo.png" alt="Resonance" className="w-12 h-12 rounded-2xl mb-4 object-cover" />
           <h1 className="text-xl font-semibold text-foreground">Запрос доступа</h1>
           <p className="text-sm text-muted-foreground mt-1">
             После заполнения формы дождитесь подтверждения администратора

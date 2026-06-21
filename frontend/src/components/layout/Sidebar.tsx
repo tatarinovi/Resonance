@@ -12,7 +12,6 @@ import {
   MessageSquare,
   MoreHorizontal,
   Plus,
-  Radio,
   Sparkles,
 } from "lucide-react";
 
@@ -294,9 +293,7 @@ export function Sidebar({ onNavigate, sidebarWidth }: SidebarProps) {
       >
         <Link href="/" className={cn("min-w-0 flex-1 text-inherit no-underline", compact ? "flex justify-center" : "")}>
           <span onClick={onNavigate} className={cn("flex items-center", compact ? "justify-center" : "w-full gap-2.5")}>
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary">
-              <Radio size={14} className="text-white" />
-            </div>
+            <img src="/sidebar-logo.png" alt="Resonance" className="h-7 w-7 shrink-0 rounded-lg object-cover" />
             {!compact ? <span className="min-w-0 flex-1 truncate text-sm font-semibold leading-none text-sidebar-foreground">Resonance</span> : null}
           </span>
         </Link>
