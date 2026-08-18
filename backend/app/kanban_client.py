@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
+from time import perf_counter
 from typing import Any
 from urllib.parse import urlparse
 
@@ -11,8 +13,17 @@ from fastapi import HTTPException
 
 from .config import get_settings
 
-
 settings = get_settings()
+
+
+def _trace_request(message: str, *args: object) -> None:
+    """Emit HTTP diagnostics directly to the container stderr.
+
+    Uvicorn's logging configuration may override application log handlers after import;
+    stderr is captured by Docker regardless of that configuration.
+    """
+    print(message % args, file=sys.stderr, flush=True)
+
 
 # HTTP paths and payloads follow DS Kanban OpenAPI: `helps/v1.json` (DS KANBAN API v1.0.0).
 
@@ -42,10 +53,16 @@ def _to_iso_date(value: str | datetime | None) -> str | None:
 def parse_kanban_reference(kanban_url: str) -> tuple[str, int]:
     path_parts = [part for part in urlparse(kanban_url).path.split("/") if part]
     for index, part in enumerate(path_parts):
-        if part in {"projects", "project"} and index + 2 < len(path_parts) and path_parts[index + 2].isdigit():
+        if (
+            part in {"projects", "project"}
+            and index + 2 < len(path_parts)
+            and path_parts[index + 2].isdigit()
+        ):
             return path_parts[index + 1], int(path_parts[index + 2])
 
-    numeric_parts = [(index, part) for index, part in enumerate(path_parts) if part.isdigit()]
+    numeric_parts = [
+        (index, part) for index, part in enumerate(path_parts) if part.isdigit()
+    ]
     if numeric_parts:
         index, value = numeric_parts[-1]
         slug = path_parts[index - 1] if index > 0 else ""
@@ -62,9 +79,13 @@ class KanbanClient:
 
     def __post_init__(self) -> None:
         if not self.token:
-            raise HTTPException(status_code=503, detail="Kanban token is not configured for this user.")
+            raise HTTPException(
+                status_code=503, detail="Kanban token is not configured for this user."
+            )
         self.base_url = settings.kanban_api_base_url.rstrip("/")
-        self.web_base_url = self.base_url[:-4] if self.base_url.endswith("/api") else self.base_url
+        self.web_base_url = (
+            self.base_url[:-4] if self.base_url.endswith("/api") else self.base_url
+        )
 
     def _auth_headers(self) -> dict[str, str]:
         return {
@@ -87,18 +108,27 @@ class KanbanClient:
             finally:
                 self._pooled_http = None
 
-    def _request(self, path: str, params: list[tuple[str, str]] | None = None) -> dict | list:
+    def _request(
+        self, path: str, params: list[tuple[str, str]] | None = None
+    ) -> dict | list:
         return self._request_json("GET", path, params=params, json_body=None)
 
     def _parse_kanban_response(self, response: httpx.Response) -> Any:
         if response.status_code == 401:
-            raise HTTPException(status_code=401, detail="Kanban token is invalid or expired.")
+            raise HTTPException(
+                status_code=401, detail="Kanban token is invalid or expired."
+            )
         if response.status_code >= 400:
             detail = response.text
             try:
                 parsed = response.json()
                 if isinstance(parsed, dict):
-                    detail = str(parsed.get("message") or parsed.get("error") or parsed.get("detail") or parsed)[:800]
+                    detail = str(
+                        parsed.get("message")
+                        or parsed.get("error")
+                        or parsed.get("detail")
+                        or parsed
+                    )[:800]
             except ValueError:
                 pass
             hint = ""
@@ -109,7 +139,9 @@ class KanbanClient:
                     "Войдите в Kanban тем же пользователем, которому выдан доступ в проекте, и переподключите токен."
                 )
             raise HTTPException(
-                status_code=502 if response.status_code >= 500 else response.status_code,
+                status_code=502
+                if response.status_code >= 500
+                else response.status_code,
                 detail=f"Kanban API error ({response.status_code}): {detail}{hint}",
             )
         if response.status_code == 204 or not (response.content or b"").strip():
@@ -117,7 +149,9 @@ class KanbanClient:
         try:
             payload = response.json()
         except ValueError as exc:
-            raise HTTPException(status_code=502, detail="Kanban API returned invalid JSON.") from exc
+            raise HTTPException(
+                status_code=502, detail="Kanban API returned invalid JSON."
+            ) from exc
         return _kanban_data(payload)
 
     def _request_json(
@@ -129,6 +163,8 @@ class KanbanClient:
         json_body: Any | None = None,
     ) -> Any:
         url = f"{self.base_url}{path}"
+        started_at = perf_counter()
+        _trace_request("Kanban API request started: %s %s", method, url)
         pooled = self._pooled_http
         try:
             if pooled is not None:
@@ -138,13 +174,33 @@ class KanbanClient:
                     timeout=settings.kanban_timeout_seconds,
                     headers=self._auth_headers(),
                 ) as client:
-                    response = client.request(method, url, params=params, json=json_body)
+                    response = client.request(
+                        method, url, params=params, json=json_body
+                    )
         except httpx.HTTPError as exc:
-            raise HTTPException(status_code=502, detail=f"Kanban API request failed: {exc}") from exc
+            _trace_request(
+                "Kanban API request failed: %s %s after %.3fs: %s",
+                method,
+                url,
+                perf_counter() - started_at,
+                exc,
+            )
+            raise HTTPException(
+                status_code=502, detail=f"Kanban API request failed: {exc}"
+            ) from exc
 
+        _trace_request(
+            "Kanban API request completed: %s %s status=%s duration=%.3fs",
+            method,
+            url,
+            response.status_code,
+            perf_counter() - started_at,
+        )
         return self._parse_kanban_response(response)
 
-    def get(self, path: str, params: list[tuple[str, str]] | None = None) -> dict | list:
+    def get(
+        self, path: str, params: list[tuple[str, str]] | None = None
+    ) -> dict | list:
         result = self._request_json("GET", path, params=params, json_body=None)
         return result if isinstance(result, (dict, list)) else {}
 
@@ -167,7 +223,11 @@ class KanbanClient:
     def projects(self) -> list[dict[str, Any]]:
         payload = self.get("/project")
         projects = payload if isinstance(payload, list) else []
-        return [item for item in projects if not item.get("is_archived") and item.get("is_archived") != 1]
+        return [
+            item
+            for item in projects
+            if not item.get("is_archived") and item.get("is_archived") != 1
+        ]
 
     def project_users(self, slug: str) -> list[dict[str, Any]]:
         """GET /project/{slug}/user — участники проекта (см. v1.json)."""
@@ -182,7 +242,9 @@ class KanbanClient:
             return users if isinstance(users, list) else []
         return []
 
-    def project_list(self, slug: str, params: list[tuple[str, str]]) -> list[dict[str, Any]]:
+    def project_list(
+        self, slug: str, params: list[tuple[str, str]]
+    ) -> list[dict[str, Any]]:
         """GET /project/{slug}/list — список вне канбан-контекста (пагинация count/page)."""
         payload = self.get(f"/project/{slug}/list", params=params)
         if isinstance(payload, list):
@@ -198,7 +260,9 @@ class KanbanClient:
         params = [("filter[type_id][5]", "5")]
         return self.project_list_all(slug, params=params)
 
-    def project_list_all(self, slug: str, params: list[tuple[str, str]], page_size: int = 100) -> list[dict[str, Any]]:
+    def project_list_all(
+        self, slug: str, params: list[tuple[str, str]], page_size: int = 100
+    ) -> list[dict[str, Any]]:
         items: list[dict[str, Any]] = []
         page = 1
 
@@ -214,7 +278,9 @@ class KanbanClient:
 
         return items
 
-    def project_board_task_list(self, slug: str, params: list[tuple[str, str]]) -> list[dict[str, Any]]:
+    def project_board_task_list(
+        self, slug: str, params: list[tuple[str, str]]
+    ) -> list[dict[str, Any]]:
         """GET /project/{slug}/task — список задач проекта для канбана (см. v1.json)."""
         payload = self.get(f"/project/{slug}/task", params=params)
         return payload if isinstance(payload, list) else []
@@ -286,10 +352,14 @@ class KanbanClient:
         return self._request_json("POST", f"/task-estimate/{task_id}", json_body=body)
 
     def post_task_checklist(self, task_id: int, body: dict[str, Any]) -> Any:
-        return self._request_json("POST", f"/task-check-item/task/{task_id}", json_body=body)
+        return self._request_json(
+            "POST", f"/task-check-item/task/{task_id}", json_body=body
+        )
 
     def patch_checklist_point(self, point_id: int, body: dict[str, Any]) -> Any:
-        return self._request_json("PATCH", f"/task-check-item/update/{point_id}", json_body=body)
+        return self._request_json(
+            "PATCH", f"/task-check-item/update/{point_id}", json_body=body
+        )
 
     def task_url(self, project_slug: str, task_id: int) -> str:
         return f"{self.web_base_url}/projects/{project_slug}/{task_id}"
@@ -298,12 +368,21 @@ class KanbanClient:
 def normalize_person(person: Any) -> str | None:
     if not isinstance(person, dict):
         return None
-    parts = [str(person.get("name") or "").strip(), str(person.get("surname") or "").strip()]
+    parts = [
+        str(person.get("name") or "").strip(),
+        str(person.get("surname") or "").strip(),
+    ]
     full_name = " ".join(part for part in parts if part)
-    return full_name or str(person.get("username") or person.get("email") or "").strip() or None
+    return (
+        full_name
+        or str(person.get("username") or person.get("email") or "").strip()
+        or None
+    )
 
 
-def normalize_stage(task: dict[str, Any], stages_map: dict[int, dict[str, Any]]) -> dict[str, Any]:
+def normalize_stage(
+    task: dict[str, Any], stages_map: dict[int, dict[str, Any]]
+) -> dict[str, Any]:
     stage = task.get("stage")
     stage_id = stage.get("id") if isinstance(stage, dict) else stage
     # Do not fall back to task["status"]: in Kanban API it is often a workflow code (1 Новая, 2 …),
@@ -316,12 +395,19 @@ def normalize_stage(task: dict[str, Any], stages_map: dict[int, dict[str, Any]])
     meta = stages_map.get(stage_id) or {}
     return {
         "id": stage_id,
-        "name": meta.get("name") or task.get("stage_name") or task.get("status_name") or "Unknown",
+        "name": meta.get("name")
+        or task.get("stage_name")
+        or task.get("status_name")
+        or "Unknown",
     }
 
 
-def normalize_assignees(task: dict[str, Any], project_users: list[dict[str, Any]]) -> list[str]:
-    project_user_map = {user.get("id"): user for user in project_users if isinstance(user, dict)}
+def normalize_assignees(
+    task: dict[str, Any], project_users: list[dict[str, Any]]
+) -> list[str]:
+    project_user_map = {
+        user.get("id"): user for user in project_users if isinstance(user, dict)
+    }
     assignees = task.get("assignees") or task.get("users") or []
     names: list[str] = []
     for item in assignees:
@@ -357,9 +443,19 @@ def normalize_task(
 ) -> dict[str, Any]:
     stage = normalize_stage(task, stages_map)
     assignees = normalize_assignees(task, project_users)
-    tracked_seconds = int(task.get("time_spent") or task.get("time_tracked") or task.get("spent_time") or task.get("logged_time") or 0)
+    tracked_seconds = int(
+        task.get("time_spent")
+        or task.get("time_tracked")
+        or task.get("spent_time")
+        or task.get("logged_time")
+        or 0
+    )
     priority = task.get("priority")
-    priority_id = priority.get("id") if isinstance(priority, dict) else priority or task.get("priority_id")
+    priority_id = (
+        priority.get("id")
+        if isinstance(priority, dict)
+        else priority or task.get("priority_id")
+    )
     priority_name = priority.get("name") if isinstance(priority, dict) else None
 
     return {
@@ -375,7 +471,9 @@ def normalize_task(
             "id": priority_id,
             "name": priority_name or "Unknown",
         },
-        "deadline": task.get("deadline") or task.get("deadline_date") or task.get("due_date"),
+        "deadline": task.get("deadline")
+        or task.get("deadline_date")
+        or task.get("due_date"),
         "assignees": assignees,
         "tracked_hours": round(tracked_seconds / 3600, 2),
         "is_super_task": bool(task.get("super_task") or task.get("is_super_task")),

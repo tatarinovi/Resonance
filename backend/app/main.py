@@ -2,9 +2,10 @@ import asyncio
 import logging
 import sys
 import traceback
+
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, JSONResponse
 
 from .bootstrap import bootstrap_database
 from .config import get_settings
@@ -17,11 +18,11 @@ from .routers import (
     aggregates,
     analytics,
     auth,
-    kanban,
     dashboard,
     epics,
     feedback,
     files,
+    kanban,
     notifications,
     reference,
     stream,
@@ -31,13 +32,17 @@ from .routers import (
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[logging.StreamHandler(sys.stdout)],
+    force=True,
 )
 logger = logging.getLogger("matrix-hub")
 poll_logger = logging.getLogger(__name__)
 
 settings = get_settings()
-app = FastAPI(title=settings.app_name, openapi_url=f"{settings.api_prefix}/openapi.json")
+app = FastAPI(
+    title=settings.app_name, openapi_url=f"{settings.api_prefix}/openapi.json"
+)
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
@@ -47,11 +52,12 @@ async def global_exception_handler(request: Request, exc: Exception):
     """
     logger.error(f"Unhandled error during {request.method} {request.url}")
     logger.error(traceback.format_exc())
-    
+
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal server error. Check logs for details."}
+        content={"detail": "Internal server error. Check logs for details."},
     )
+
 
 app.add_middleware(
     CORSMiddleware,
