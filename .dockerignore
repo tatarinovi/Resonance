@@ -6,8 +6,6 @@ vizitka
 helps
 scripts
 static
-Caddyfile
-docker-compose.yml
 **/.env
 **/.env.*
 !.env.example

@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     telegram_enabled: bool = False
 
     # MinIO / S3 Storage
-    s3_endpoint: str = "http://matrix-minio:9000"
+    s3_endpoint: str = "http://minio:9000"
     s3_access_key: str = "matrix"
     s3_secret_key: str = "matrix123"
     s3_bucket: str = "attachments"

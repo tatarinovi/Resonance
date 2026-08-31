@@ -179,6 +179,7 @@ Backend (FastAPI)
 backend/             FastAPI API, миграции, сервисы и тесты
 frontend/            React/Vite приложение
 deploy/local/        локальный Docker Compose профиль
+deploy/work/         облегчённый HTTP-профиль для рабочего сервера без MinIO и ботов
 deploy/production/   production-конфигурация
 deploy/docker/       Dockerfile для production-образов
 backend/docs/        техническая документация
@@ -268,7 +269,7 @@ npm run build
 ### Production Compose
 
 ```bash
-docker compose \
+ENV_FILE=.env.example docker compose \
   -f deploy/production/docker-compose.production.yml \
   --env-file deploy/production/.env.example \
   config
