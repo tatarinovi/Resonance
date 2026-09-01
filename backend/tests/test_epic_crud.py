@@ -17,6 +17,7 @@ from app.models import (
     EpicComment,
     EpicQA,
     EpicQAStatus,
+    EpicJiraIssue,
     EpicTestStage,
     Project,
     User,
@@ -179,6 +180,45 @@ class TestEpicUpdate:
                 "qa_estimate_hours": 10.5,
             }, headers=_auth("emp"))
             assert resp.status_code == 200
+        finally:
+            app.dependency_overrides.clear()
+
+
+class TestEpicJiraTasks:
+    def test_project_member_reads_cached_jira_tasks(self):
+        client, SessionLocal = _setup()
+        try:
+            with SessionLocal() as db:
+                project = _make_project(db, "P1")
+                member = _make_user(db, "member")
+                member.projects = [project]
+                epic = _make_epic(db, project)
+                db.add(EpicJiraIssue(
+                    epic_id=epic.id, jira_issue_key="P1-7", summary="Cached task", status="Open",
+                    priority=None, assignee_display_name=None, issue_type=None,
+                    browser_url="https://jira.example.com/browse/P1-7", refreshed_at=datetime.utcnow(),
+                ))
+                db.commit()
+                epic_id = epic.id
+            response = client.get(f"/api/epics/{epic_id}/jira-issues", headers=_auth("member"))
+            assert response.status_code == 200
+            assert response.json()["total"] == 1
+            assert response.json()["items"][0]["key"] == "P1-7"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_refresh_without_jql_returns_controlled_conflict(self):
+        client, SessionLocal = _setup()
+        try:
+            with SessionLocal() as db:
+                project = _make_project(db, "P1")
+                coordinator = _make_user(db, "coord", role=UserRole.COORDINATOR)
+                coordinator.projects = [project]
+                epic = _make_epic(db, project)
+                db.commit()
+                epic_id = epic.id
+            response = client.post(f"/api/epics/{epic_id}/jira-issues/refresh", headers=_auth("coord"))
+            assert response.status_code == 409
         finally:
             app.dependency_overrides.clear()
 

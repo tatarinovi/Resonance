@@ -9,6 +9,7 @@ import {
   Inbox,
   LayoutDashboard,
   Layers,
+  Rocket,
   Settings,
   Users,
 } from "lucide-react";
@@ -52,6 +53,7 @@ export const NAVIGATION_SECTIONS: NavigationSection[] = [
     items: [
       { href: "/questions", icon: HelpCircle, label: "Вопросы" },
       { href: "/epics", icon: Layers, label: "Эпики" },
+      { href: "/releases", icon: Rocket, label: "Релизы" },
       { href: "/projects", icon: FolderKanban, label: "Проекты" },
     ],
   },

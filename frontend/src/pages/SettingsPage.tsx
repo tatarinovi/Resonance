@@ -3,10 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Switch } from "@/components/ui/switch";
-import { AlertTriangle, Bell, Loader2, LogOut, Palette, User } from "lucide-react";
+import { AlertTriangle, Bell, FolderKanban, Loader2, LogOut, Palette, User } from "lucide-react";
 
 import { useAuth } from "@/contexts/AuthContext";
-import { useDeliveryHealthQuery, useUpdateMe } from "@/lib/queries";
+import { useCheckIntegration, useConnectKanbanIntegration, useDeliveryHealthQuery, useDisconnectIntegration, useIntegrations, useSaveIntegration, useUpdateMe, type Integration } from "@/lib/queries";
 import type { PersonalChannelMode } from "@/lib/types";
 import { ApiError } from "@/lib/api";
 import {
@@ -23,6 +23,7 @@ const tabs = [
   { id: "profile", label: "Профиль", icon: User },
   { id: "notifications", label: "Уведомления", icon: Bell },
   { id: "appearance", label: "Внешний вид", icon: Palette },
+  { id: "integrations", label: "Интеграции", icon: FolderKanban },
 ] as const;
 
 type Tab = typeof tabs[number]["id"];
@@ -34,6 +35,8 @@ export default function SettingsPage() {
   const { isDark, setDarkMode } = useThemePreference();
   const [tab, setTab] = useState<Tab>("profile");
   const deliveryHealth = useDeliveryHealthQuery(tab === "notifications");
+  const isAdmin = me?.role === "admin";
+  const visibleTabs = tabs.filter((item) => item.id !== "integrations" || isAdmin);
 
   const [telegramEdit, setTelegramEdit] = useState("");
   const [matrixEdit, setMatrixEdit] = useState("");
@@ -149,7 +152,7 @@ export default function SettingsPage() {
 
       {/* Mobile: horizontal tab bar */}
       <div className="flex gap-1 mb-5 overflow-x-auto pb-1 md:hidden">
-        {tabs.map(t => (
+        {visibleTabs.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
@@ -166,7 +169,7 @@ export default function SettingsPage() {
         {/* Desktop: vertical tab nav */}
         <div className="hidden md:block w-44 flex-shrink-0">
           <nav className="space-y-0.5">
-            {tabs.map(t => (
+            {visibleTabs.map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
@@ -486,10 +489,54 @@ export default function SettingsPage() {
               </div>
             </div>
           )}
+
+          {tab === "integrations" && isAdmin && <IntegrationsSettings />}
         </div>
       </div>
     </div>
   );
+}
+
+function IntegrationsSettings() {
+  const integrations = useIntegrations(true);
+  const save = useSaveIntegration();
+  const connectKanban = useConnectKanbanIntegration();
+  const check = useCheckIntegration();
+  const disconnect = useDisconnectIntegration();
+  const [drafts, setDrafts] = useState<Record<string, Record<string, string>>>({});
+
+  const draft = (item: Integration): Record<string, string> => ({ endpoint: item.endpoint, username: item.username ?? "", auth_type: item.auth_type, ...(drafts[item.type] ?? {}) });
+  const setDraft = (type: string, patch: Record<string, string>) => setDrafts((old) => ({ ...old, [type]: { ...(old[type] ?? {}), ...patch } }));
+  const clearSecret = (type: string) => setDraft(type, { secret: "", password: "" });
+  const run = async (action: () => Promise<unknown>, type: string, message: string) => {
+    try { await action(); toast.success(message); } catch (error) { toast.error(error instanceof ApiError ? error.message : "Операция не выполнена"); } finally { clearSecret(type); }
+  };
+
+  if (integrations.isLoading) return <div className="text-sm text-muted-foreground">Загрузка интеграций…</div>;
+  if (integrations.isError || !integrations.data) return <Alert variant="destructive"><AlertDescription>Не удалось загрузить интеграции.</AlertDescription></Alert>;
+  return <div className="space-y-4">
+    <p className="text-sm text-muted-foreground">Подключения общие для всего инстанса. Секреты никогда не отображаются после сохранения.</p>
+    {integrations.data.map((item) => {
+      const value = draft(item);
+      const busy = save.isPending || connectKanban.isPending || check.isPending || disconnect.isPending;
+      const title = item.type === "kanban" ? "Kanban" : item.type === "jira" ? "Jira" : "TestOps";
+      return <section key={item.type} className="space-y-3 rounded-xl border border-border bg-card p-4 md:p-5" data-testid={`integration-${item.type}`}>
+        <div className="flex items-start justify-between gap-3"><div><h3 className="text-sm font-semibold">{title}</h3><p className="text-xs text-muted-foreground">Учётные данные: {item.credentials_configured ? "настроены" : "не настроены"} · проверка: {integrationCheckStatusLabel(item.last_check_status)}</p>{item.last_checked_at && <p className="mt-1 text-xs text-muted-foreground">Последняя проверка: {new Date(item.last_checked_at).toLocaleString("ru-RU")}</p>}{item.last_check_error && <p className="mt-1 text-xs text-destructive">{item.last_check_error}</p>}</div></div>
+        <label className="block text-xs font-medium text-muted-foreground">Endpoint<input value={value.endpoint} onChange={(e) => setDraft(item.type, { endpoint: e.target.value })} placeholder="https://service.example" className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" /></label>
+        {item.type === "kanban" ? <><label className="block text-xs font-medium text-muted-foreground">Email<input value={value.username} onChange={(e) => setDraft(item.type, { username: e.target.value })} className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" /></label><label className="block text-xs font-medium text-muted-foreground">Пароль<input type="password" value={value.password ?? ""} onChange={(e) => setDraft(item.type, { password: e.target.value })} className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" /></label></> : <>{item.type === "jira" && <label className="block text-xs font-medium text-muted-foreground">Способ авторизации<select value={value.auth_type} onChange={(e) => setDraft(item.type, { auth_type: e.target.value })} className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground"><option value="token">Token</option><option value="basic">Basic</option></select></label>}{item.type === "jira" && value.auth_type === "basic" && <label className="block text-xs font-medium text-muted-foreground">Логин<input value={value.username} onChange={(e) => setDraft(item.type, { username: e.target.value })} className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" /></label>}<label className="block text-xs font-medium text-muted-foreground">{item.type === "jira" ? "Token / password" : "API token"}<input type="password" value={value.secret ?? ""} onChange={(e) => setDraft(item.type, { secret: e.target.value })} className="mt-1.5 w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground" /></label></>}
+        <div className="flex flex-wrap gap-2"><button disabled={busy} onClick={() => void run(() => item.type === "kanban" ? connectKanban.mutateAsync({ endpoint: value.endpoint, email: value.username, password: value.password ?? "" }) : save.mutateAsync({ type: item.type, body: { endpoint: value.endpoint, auth_type: value.auth_type, username: value.username || null, secret: value.secret } }), item.type, "Настройки сохранены")} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground disabled:opacity-50">Сохранить</button><button disabled={busy} onClick={() => void run(() => check.mutateAsync(item.type), item.type, "Проверка выполнена")} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium disabled:opacity-50">Check Connection</button><button disabled={busy} onClick={() => void run(() => disconnect.mutateAsync(item.type), item.type, "Credentials удалены")} className="rounded-md border border-destructive/40 px-3 py-1.5 text-xs font-medium text-destructive disabled:opacity-50">Disconnect</button></div>
+      </section>;
+    })}
+  </div>;
+}
+
+function integrationCheckStatusLabel(status: Integration["last_check_status"]): string {
+  switch (status) {
+    case "never": return "ещё не выполнялась";
+    case "success": return "успешно";
+    case "failed": return "ошибка";
+    case "credential_unreadable": return "требуется повторное подключение";
+  }
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

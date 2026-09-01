@@ -14,6 +14,7 @@ from ..config import get_settings
 from ..database import get_db
 from ..datetime_util import utc_iso_z
 from ..deps import require_admin
+from ..integration_service import optional_global_kanban_token, require_global_kanban_token
 from ..kanban_client import KanbanClient, normalize_person, normalize_stage, normalize_task, parse_kanban_reference
 from ..kanban_member_roles import ROLE_ORDER, effective_role, load_project_role_map
 from ..models import AppSetting, Epic, KanbanEpicComment, User, UserRole
@@ -29,9 +30,8 @@ SNAPSHOT_REFRESH_RUNNING_TTL = timedelta(minutes=30)
 KANBAN_SHADOW_QA_ESTIMATES_KEY = "kanban_epic_qa_estimates_shadow"
 
 
-def _kanban_client_for_user(user: User) -> KanbanClient:
-    token = user.kanban_token or settings.kanban_api_token
-    return KanbanClient(token=token)
+def _kanban_client(db: Session) -> KanbanClient:
+    return KanbanClient(token=require_global_kanban_token(db))
 
 
 def _snapshot_item_key(project_slug: str, epic_id: int) -> str:
@@ -160,16 +160,11 @@ def _mark_snapshot_refresh_failed(db: Session, exc: BaseException) -> dict[str, 
 
 
 def refresh_kanban_analytics_snapshot_from_scheduler(db: Session) -> dict[str, Any] | None:
-    """Фоновое обновление снимка Kanban (APScheduler в процессе bot). Токен: kanban_token админа или KANBAN_API_TOKEN."""
+    """Фоновое обновление снимка Kanban; без глобальных credentials тихо пропускается."""
+    if optional_global_kanban_token(db) is None:
+        return None
     admin = db.scalar(select(User).where(User.role == UserRole.ADMIN).order_by(User.id.asc()).limit(1))
     if not admin:
-        logger.warning("Kanban analytics snapshot: пропуск — в БД нет пользователя с ролью admin")
-        return None
-    token = (admin.kanban_token or settings.kanban_api_token or "").strip()
-    if not token:
-        logger.warning(
-            "Kanban analytics snapshot: пропуск — не задан Kanban-токен (у админа и в KANBAN_API_TOKEN пусто)"
-        )
         return None
     try:
         _mark_snapshot_refresh_running(db, admin, "scheduler")
@@ -499,7 +494,7 @@ def _require_snapshot(db: Session) -> dict[str, Any]:
 
 
 def _build_snapshot(db: Session, user: User) -> dict[str, Any]:
-    client = _kanban_client_for_user(user)
+    client = _kanban_client(db)
     current_user = client.current_user()
     stages = client.stages()
     projects = client.projects()
@@ -1218,10 +1213,7 @@ def kanban_epic_charts_live(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     """Графики эпика: live-агрегация из Kanban API (без снимка)."""
-    if not user.kanban_token and not (settings.kanban_api_token or "").strip():
-        raise HTTPException(status_code=409, detail="Kanban не подключён: нужен токен пользователя или KANBAN_API_TOKEN.")
-
-    client = _kanban_client_for_user(user)
+    client = _kanban_client(db)
     stages = client.stages()
     stages_map = {int(item.get("id")): item for item in stages if item.get("id") is not None}
     projects = client.projects()

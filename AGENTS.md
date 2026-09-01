@@ -10,7 +10,7 @@ Resonance is an internal question-routing and team-knowledge application. It com
 - projects, users, role- and project-scoped access;
 - epics with QA plans, stages, blockers, test runs, comments, and release data;
 - in-app, Matrix, and Telegram notifications plus digests/escalations;
-- a custom external Kanban integration and cached analytics snapshots;
+- global Kanban, Jira and TestOps connections, with encrypted instance credentials; Kanban also backs cached analytics snapshots;
 - a React single-page application behind Caddy.
 
 The UI and much of the product copy are Russian. Preserve the language of the surrounding screen or API message.
@@ -34,7 +34,7 @@ backend/
     realtime.py              process-local SSE event bus
     kanban_client.py         external Kanban HTTP client and normalization
     storage.py               S3/MinIO access
-  migrations/versions/       linear Alembic history; current head is 0014
+  migrations/versions/       linear Alembic history; current head is 0018
   tests/                     pytest API/unit coverage
   docs/                      notification and Kanban implementation notes
 frontend/
@@ -171,7 +171,7 @@ ENV_FILE=.env.example docker compose \
 - auth: `JWT_SECRET`, `JWT_EXPIRE_MINUTES`, default-admin credentials;
 - Matrix/Telegram: homeserver/user/token/device/password, enable flags, proxy/name;
 - storage: S3 endpoint/access/secret/bucket/public URL/upload limit;
-- Kanban: API URL/token/timeout/bundle page size/cache TTL.
+- integrations: `INTEGRATION_CREDENTIALS_FERNET_KEY` is mandatory and must be a ready Fernet key; `INTEGRATION_CONNECTION_CHECK_TIMEOUT_SECONDS` controls connection checks. `EPIC_JIRA_REFRESH_TIMEOUT_SECONDS`, `EPIC_JIRA_PAGE_SIZE` and `EPIC_JIRA_MAX_ISSUES` bound manual Epic task refreshes. Credentials live only in `integration_connections`, never in user records or responses.
 
 `JWT_SECRET` is mandatory, rejects common placeholders, and must be at least 16 characters. Never print or copy values from the root `.env`; it is a real ignored local file. Do not commit `.env`, `.env.local`, `.env.production`, tokens, generated credentials, database dumps, or MinIO data. Example env files must contain non-production placeholders only.
 
@@ -187,6 +187,7 @@ All application routes are under `/api`; `/health` is outside the prefix.
 | `admin.py` | user/project CRUD and global routing settings; admin-only |
 | `dashboard.py` | project/directory lookup and the full ticket lifecycle, messages, attachments |
 | `epics.py` | epic CRUD, comments, QA block, QA transitions, history, blockers, test runs |
+| `releases.py` | Release CRUD/lifecycle, Epic membership, read models, and explicit Jira/TestOps refresh |
 | `feedback.py` | user feedback and admin moderation |
 | `files.py` | S3 upload and cleanup |
 | `analytics.py` | Kanban snapshot bootstrap/refresh/lists/detail/charts/daily summary |
@@ -218,6 +219,7 @@ Registration creates a pending user when approval is required. JWT subject is th
 - `User` <-> `Project` is many-to-many through `user_projects`.
 - `Ticket` belongs to a project and optionally an epic, author, and assignee; it owns messages, attachments, events, and subscribers.
 - `Epic` belongs to a project and owns one QA block plus comments, audit records, blockers, test runs, and linked tickets.
+- `Release` belongs to one project and aggregates historical Epic memberships; external Jira/TestOps/Questions/Kanban data remains Epic-owned.
 - Notification persistence is split among user-facing `Notification`, outbound jobs/attempts, preferences/policies, fanout state, digest runs, operation contexts, and domain-event logs.
 - `KanbanLegacyTaskSeen` is the per-user deduplication baseline for polling.
 - `AppSetting` stores global JSON-ish configuration; `TelegramLinkingToken` supports account linking.
@@ -261,11 +263,11 @@ There are three related paths:
 2. `routers/kanban.py` exposes live project/task operations and a cached project bundle for the board UI.
 3. `routers/analytics.py` serves an application-level snapshot for analytics/release screens; snapshot refresh is explicit and scheduled daily.
 
-Users may have a personal `kanban_token`; a global token is the fallback where supported. External payloads are inconsistent, so keep normalization centralized and defensive. Preserve request timeout diagnostics and avoid exposing tokens in errors/logs. The legacy `/user/{id}/task/legacy` poll is documented in `backend/docs/kanban_legacy_polling.md`; first observation establishes a baseline without notification spam.
+Kanban credentials are global and administrator-managed through `GET/PATCH/POST/DELETE /api/integrations`; Jira and TestOps currently support setup and connection checks only. Epic Jira tasks are a separate, simple cache: project members read `GET /api/epics/{id}/jira-issues`; coordinators/admins run `POST /api/epics/{id}/jira-issues/refresh` from the epic JQL. There is no Epic sync worker, scheduler or release-analytics dashboard. The migration seeds exactly one row for each supported type. Never lazily create one or fall back to `User.kanban_token`; the legacy per-user poll is disabled. External payloads are inconsistent, so keep normalization centralized and defensive. Preserve request timeout diagnostics and avoid exposing tokens in errors/logs.
 
 ### Database changes
 
-Never use `Base.metadata.create_all()` as a schema-change mechanism. Add a new linear Alembic revision after `0014_userrole_coordinator`, update ORM and Pydantic/frontend DTOs together, and run `tests/test_alembic.py`. Migrations must work for both empty databases and upgrades from the previous head. `bootstrap.py` contains deliberate compatibility logic for databases that predate Alembic; do not remove it casually.
+Never use `Base.metadata.create_all()` as a schema-change mechanism. Add a new linear Alembic revision after `0018_release_center`, update ORM and Pydantic/frontend DTOs together, and run `tests/test_alembic.py`. Migrations must work for both empty databases and upgrades from the previous head. `bootstrap.py` contains deliberate compatibility logic for databases that predate Alembic; do not remove it casually.
 
 ## Frontend design
 

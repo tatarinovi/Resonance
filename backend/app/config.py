@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from cryptography.fernet import Fernet
 from pydantic import model_validator
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,6 +19,17 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:5173,http://frontend"
     run_migrations_on_startup: bool = True
     run_startup_digest_test: bool = False
+    integration_credentials_fernet_key: str = ""
+    integration_connection_check_timeout_seconds: int = 20
+    epic_jira_refresh_timeout_seconds: int = 30
+    epic_jira_page_size: int = 100
+    epic_jira_max_issues: int = 1000
+    release_external_data_stale_hours: int = 24
+    release_refresh_request_timeout_seconds: int = 30
+    release_refresh_wall_clock_seconds: int = 90
+    release_refresh_concurrency: int = 3
+    jira_blocker_priority_names: str = "blocker,блокирующий"
+    jira_critical_priority_names: str = "critical,критический"
 
     matrix_homeserver: str = "https://matrix.example.com"
     matrix_user_id: str = "@bot:example.com"
@@ -68,6 +80,23 @@ class Settings(BaseSettings):
             raise ValueError("JWT_SECRET cannot use an insecure placeholder value.")
         if len(jwt_secret) < 16:
             raise ValueError("JWT_SECRET must contain at least 16 characters.")
+
+        try:
+            Fernet(self.integration_credentials_fernet_key.encode("utf-8"))
+        except (TypeError, ValueError) as exc:
+            raise ValueError("INTEGRATION_CREDENTIALS_FERNET_KEY must be a valid Fernet key.") from exc
+
+        if self.integration_connection_check_timeout_seconds < 1:
+            raise ValueError("INTEGRATION_CONNECTION_CHECK_TIMEOUT_SECONDS must be positive.")
+        if min(self.epic_jira_refresh_timeout_seconds, self.epic_jira_page_size, self.epic_jira_max_issues) < 1:
+            raise ValueError("Epic Jira refresh limits must be positive.")
+        if min(
+            self.release_external_data_stale_hours,
+            self.release_refresh_request_timeout_seconds,
+            self.release_refresh_wall_clock_seconds,
+            self.release_refresh_concurrency,
+        ) < 1:
+            raise ValueError("Release refresh and freshness settings must be positive.")
 
         return self
 

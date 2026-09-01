@@ -14,9 +14,12 @@ from sqlalchemy import (
     Float,
     ForeignKey,
     Integer,
+    Index,
     String,
     Table,
     Text,
+    text,
+    CheckConstraint,
     UniqueConstraint,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -157,6 +160,31 @@ class KanbanLegacyTaskSeen(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
+class IntegrationConnection(Base):
+    """One global credential/configuration record for each supported integration."""
+
+    __tablename__ = "integration_connections"
+    __table_args__ = (
+        UniqueConstraint("integration_type", name="uq_integration_connections_type"),
+        CheckConstraint(
+            "integration_type IN ('kanban', 'jira', 'testops')",
+            name="ck_integration_connections_type",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    integration_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    endpoint: Mapped[str] = mapped_column(String(1000), default="", nullable=False)
+    auth_type: Mapped[str] = mapped_column(String(20), default="token", nullable=False)
+    username: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    encrypted_secret: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_check_status: Mapped[str] = mapped_column(String(32), default="never", nullable=False)
+    last_check_error: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
 class Project(Base):
     __tablename__ = "projects"
 
@@ -167,6 +195,7 @@ class Project(Base):
 
     users: Mapped[list[User]] = relationship("User", secondary=user_projects, back_populates="projects")
     tickets: Mapped[list["Ticket"]] = relationship("Ticket", back_populates="project", cascade="all, delete-orphan")
+    releases: Mapped[list["Release"]] = relationship("Release", back_populates="project", cascade="all, delete-orphan")
 
 
 class Ticket(Base):
@@ -485,6 +514,14 @@ class EpicStatus(str, Enum):
     RELEASED = "released"
 
 
+class ReleaseStatus(str, Enum):
+    DRAFT = "draft"
+    IN_PROGRESS = "in_progress"
+    READY = "ready"
+    RELEASED = "released"
+    CANCELLED = "cancelled"
+
+
 class EpicQAStatus(str, Enum):
     DRAFT = "draft"
     IN_TESTING = "in_testing"
@@ -509,6 +546,7 @@ class Epic(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     status: Mapped[EpicStatus] = mapped_column(SqlEnum(EpicStatus), default=EpicStatus.NEW, nullable=False)
     jira_url: Mapped[str] = mapped_column(String(512), nullable=False)
+    jira_jql: Mapped[str | None] = mapped_column(Text, nullable=True)
     confluence_url: Mapped[str] = mapped_column(String(512), nullable=False)
     kanban_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     design_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -541,6 +579,12 @@ class Epic(Base):
     )
     test_runs: Mapped[list["EpicTestRun"]] = relationship(
         "EpicTestRun", cascade="all, delete-orphan", order_by="EpicTestRun.created_at.desc()"
+    )
+    release_memberships: Mapped[list["ReleaseEpicMembership"]] = relationship(
+        "ReleaseEpicMembership", back_populates="epic", cascade="all, delete-orphan"
+    )
+    external_sync_states: Mapped[list["EpicExternalSyncState"]] = relationship(
+        "EpicExternalSyncState", back_populates="epic", cascade="all, delete-orphan"
     )
 
 
@@ -625,11 +669,168 @@ class EpicTestRun(Base):
     environment: Mapped[str] = mapped_column(String(10), nullable=False)
     status: Mapped[str] = mapped_column(String(20), default=TestRunStatus.PLANNED.value, nullable=False)
     url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    testops_launch_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
 
     epic: Mapped[Epic] = relationship("Epic", back_populates="test_runs")
+    testops_snapshot: Mapped["EpicTestOpsSnapshot | None"] = relationship(
+        "EpicTestOpsSnapshot", back_populates="test_run", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class EpicJiraIssue(Base):
+    __tablename__ = "epic_jira_issues"
+    __table_args__ = (UniqueConstraint("epic_id", "jira_issue_key", name="uq_epic_jira_issue_key"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    epic_id: Mapped[int] = mapped_column(ForeignKey("epics.id", ondelete="CASCADE"), nullable=False, index=True)
+    jira_issue_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    summary: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(255), nullable=False)
+    priority: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    assignee_display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    issue_type: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    browser_url: Mapped[str] = mapped_column(String(2048), nullable=False)
+    refreshed_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+
+class EpicExternalSyncState(Base):
+    __tablename__ = "epic_external_sync_states"
+    __table_args__ = (
+        UniqueConstraint("epic_id", "source", name="uq_epic_external_sync_source"),
+        CheckConstraint("source IN ('jira', 'testops')", name="ck_epic_external_sync_source"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    epic_id: Mapped[int] = mapped_column(ForeignKey("epics.id", ondelete="CASCADE"), nullable=False, index=True)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    last_error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    item_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    epic: Mapped[Epic] = relationship("Epic", back_populates="external_sync_states")
+
+
+class EpicTestOpsSnapshot(Base):
+    __tablename__ = "epic_testops_snapshots"
+
+    test_run_id: Mapped[int] = mapped_column(
+        ForeignKey("epic_test_runs.id", ondelete="CASCADE"), primary_key=True
+    )
+    external_launch_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    status: Mapped[str] = mapped_column(String(64), nullable=False)
+    total: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    passed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failed: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    broken: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    blocked: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    in_progress: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    synced_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    test_run: Mapped[EpicTestRun] = relationship("EpicTestRun", back_populates="testops_snapshot")
+    problem_cases: Mapped[list["EpicTestOpsProblemCase"]] = relationship(
+        "EpicTestOpsProblemCase", back_populates="snapshot", cascade="all, delete-orphan"
+    )
+
+
+class EpicTestOpsProblemCase(Base):
+    __tablename__ = "epic_testops_problem_cases"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    test_run_id: Mapped[int] = mapped_column(
+        ForeignKey("epic_testops_snapshots.test_run_id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    case_name: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String(64), nullable=False)
+    safe_comment: Mapped[str | None] = mapped_column(Text, nullable=True)
+    external_url: Mapped[str | None] = mapped_column(String(2048), nullable=True)
+    defect_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
+
+    snapshot: Mapped[EpicTestOpsSnapshot] = relationship("EpicTestOpsSnapshot", back_populates="problem_cases")
+
+
+class Release(Base):
+    __tablename__ = "releases"
+    __table_args__ = (
+        UniqueConstraint("project_id", "sequence_number", name="uq_release_project_sequence"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[ReleaseStatus] = mapped_column(SqlEnum(ReleaseStatus), default=ReleaseStatus.DRAFT, nullable=False, index=True)
+    planned_release_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    released_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    owner_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    release_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True, index=True)
+    archived_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    project: Mapped[Project] = relationship("Project", back_populates="releases")
+    owner: Mapped["User | None"] = relationship("User", foreign_keys=[owner_user_id])
+    created_by: Mapped["User | None"] = relationship("User", foreign_keys=[created_by_id])
+    archived_by: Mapped["User | None"] = relationship("User", foreign_keys=[archived_by_id])
+    memberships: Mapped[list["ReleaseEpicMembership"]] = relationship(
+        "ReleaseEpicMembership", back_populates="release", cascade="all, delete-orphan"
+    )
+    audit_logs: Mapped[list["ReleaseAuditLog"]] = relationship(
+        "ReleaseAuditLog", back_populates="release", cascade="all, delete-orphan",
+        order_by="ReleaseAuditLog.created_at.desc()",
+    )
+
+    @property
+    def key(self) -> str:
+        return f"REL-{self.sequence_number:03d}"
+
+
+class ReleaseEpicMembership(Base):
+    __tablename__ = "release_epic_memberships"
+    __table_args__ = (
+        Index(
+            "uq_release_membership_active_epic",
+            "epic_id",
+            unique=True,
+            postgresql_where=text("is_active = true"),
+            sqlite_where=text("is_active = 1"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    release_id: Mapped[int] = mapped_column(ForeignKey("releases.id", ondelete="CASCADE"), nullable=False, index=True)
+    epic_id: Mapped[int] = mapped_column(ForeignKey("epics.id", ondelete="CASCADE"), nullable=False, index=True)
+    added_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    removed_by_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    release: Mapped[Release] = relationship("Release", back_populates="memberships")
+    epic: Mapped[Epic] = relationship("Epic", back_populates="release_memberships")
+    added_by: Mapped["User | None"] = relationship("User", foreign_keys=[added_by_id])
+    removed_by: Mapped["User | None"] = relationship("User", foreign_keys=[removed_by_id])
+
+
+class ReleaseAuditLog(Base):
+    __tablename__ = "release_audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    release_id: Mapped[int] = mapped_column(ForeignKey("releases.id", ondelete="CASCADE"), nullable=False, index=True)
+    actor_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    details_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+    release: Mapped[Release] = relationship("Release", back_populates="audit_logs")
+    actor: Mapped["User | None"] = relationship("User")
 
 
 class KanbanEpicComment(Base):

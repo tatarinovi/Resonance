@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState } from "react";
 import { useLocation as useRouterLocation } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -8,7 +8,6 @@ import {
   FolderKanban,
   FolderOpen,
   Keyboard,
-  Loader2,
   MessageSquare,
   MoreHorizontal,
   Plus,
@@ -17,17 +16,6 @@ import {
 
 import { CreateQuestionDialog } from "@/components/questions/CreateQuestionDialog";
 import { FeedbackDialog } from "@/components/feedback/FeedbackDialog";
-import { KanbanLoginDialog } from "@/components/kanban/KanbanLoginDialog";
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,7 +39,6 @@ import { questions } from "@/data/questions";
 import { useInbox } from "@/hooks/useInbox";
 import { useIsNotaWorkspace } from "@/hooks/useIsNotaWorkspace";
 import { useQuestionDraftPresence } from "@/hooks/useQuestionDraftPresence";
-import { ApiError } from "@/lib/api";
 import {
   OVERFLOW_NAVIGATION_SECTIONS,
   VISIBLE_NAVIGATION_SECTIONS,
@@ -59,7 +46,6 @@ import {
   type FocusNavigationCounts,
   type NavigationItem,
 } from "@/lib/navigation";
-import { useUpdateMe } from "@/lib/queries";
 import { Link } from "@/lib/router";
 import { cn } from "@/lib/utils";
 
@@ -244,15 +230,11 @@ export function Sidebar({ onNavigate, sidebarWidth }: SidebarProps) {
   const [createQuestionOpen, setCreateQuestionOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [shortcutHelpOpen, setShortcutHelpOpen] = useState(false);
-  const [kanbanLoginOpen, setKanbanLoginOpen] = useState(false);
-  const [kanbanLogoutOpen, setKanbanLogoutOpen] = useState(false);
   const { me } = useAuth();
-  const updateMe = useUpdateMe();
   const { unreadCount: inboxUnread } = useInbox();
   const isNota = useIsNotaWorkspace();
   const hasQuestionDraft = useQuestionDraftPresence(me?.id ?? null);
   const isAdmin = me?.role === "admin";
-  const isKanbanConnected = Boolean(me?.kanban_connected);
   const compact = sidebarWidth < COMPACT_BREAKPOINT_PX;
   const blockedEpicIds = new Set(epics.filter((epic) => epic.blockers.length > 0).map((epic) => epic.id));
   const focusCounts: FocusNavigationCounts = {
@@ -260,23 +242,6 @@ export function Sidebar({ onNavigate, sidebarWidth }: SidebarProps) {
     waiting: questions.filter((question) => question.status === "Ожидает автора").length,
     blocked: questions.filter((question) => question.epicId && blockedEpicIds.has(question.epicId)).length,
   };
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    const handler = () => setKanbanLoginOpen(true);
-    window.addEventListener("resonance:kanban-login", handler);
-    return () => window.removeEventListener("resonance:kanban-login", handler);
-  }, [isAdmin]);
-
-  const confirmKanbanLogout = useCallback(async () => {
-    try {
-      await updateMe.mutateAsync({ kanban_token: null });
-      toast.success("Вы вышли из Kanban");
-      window.location.reload();
-    } catch (e) {
-      toast.error(e instanceof ApiError ? e.message : "Не удалось выйти из Kanban");
-    }
-  }, [updateMe]);
 
   return (
     <aside
@@ -415,8 +380,7 @@ export function Sidebar({ onNavigate, sidebarWidth }: SidebarProps) {
                   <DropdownMenuLabel className="px-2 py-1 text-[11px] uppercase tracking-wide text-muted-foreground">
                     Kanban
                   </DropdownMenuLabel>
-                  {isKanbanConnected ? (
-                    <>
+                  <>
                       <DropdownMenuItem asChild>
                         <Link href="/admin/kanban/projects" className="cursor-pointer" onClick={onNavigate}>
                           <FolderKanban size={15} />
@@ -441,23 +405,7 @@ export function Sidebar({ onNavigate, sidebarWidth }: SidebarProps) {
                           Сводка
                         </Link>
                       </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem className="cursor-pointer" onClick={() => setKanbanLogoutOpen(true)}>
-                        Выйти из Kanban
-                      </DropdownMenuItem>
-                    </>
-                  ) : (
-                    <DropdownMenuItem
-                      className="cursor-pointer"
-                      onClick={() => {
-                        setKanbanLoginOpen(true);
-                        onNavigate?.();
-                      }}
-                    >
-                      <FolderKanban size={15} />
-                      Подключить Kanban
-                    </DropdownMenuItem>
-                  )}
+                  </>
                 </>
               ) : null}
             </DropdownMenuContent>
@@ -505,27 +453,6 @@ export function Sidebar({ onNavigate, sidebarWidth }: SidebarProps) {
       <ShortcutHelpSheet open={shortcutHelpOpen} onOpenChange={setShortcutHelpOpen} />
       <FeedbackDialog open={feedbackOpen} onOpenChange={setFeedbackOpen} />
       <CreateQuestionDialog open={createQuestionOpen} onOpenChange={setCreateQuestionOpen} />
-      {isAdmin ? (
-        <AlertDialog open={kanbanLogoutOpen} onOpenChange={setKanbanLogoutOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Выйти из Kanban?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Токен доступа к Kanban будет удалён. Разделы админки Kanban станут недоступны, пока вы снова не
-                подключите учётную запись.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Отмена</AlertDialogCancel>
-              <Button type="button" disabled={updateMe.isPending} onClick={() => void confirmKanbanLogout()}>
-                {updateMe.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Выйти
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      ) : null}
-      {isAdmin ? <KanbanLoginDialog open={kanbanLoginOpen} onOpenChange={setKanbanLoginOpen} /> : null}
     </aside>
   );
 }

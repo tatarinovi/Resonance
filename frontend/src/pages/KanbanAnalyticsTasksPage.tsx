@@ -80,7 +80,7 @@ export default function KanbanAnalyticsTasksPage() {
               <button
                 type="button"
                 className="inline-flex items-center gap-2 px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors"
-                onClick={() => window.dispatchEvent(new Event("resonance:kanban-login"))}
+                onClick={() => { window.location.href = "/settings"; }}
               >
                 Подключить Kanban
               </button>

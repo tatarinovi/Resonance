@@ -27,6 +27,9 @@ import type {
   ApiProfileStats,
   ApiProject,
   ApiReferenceData,
+  ApiRelease,
+  ApiReleaseOverview,
+  ApiReleasePage,
   ApiRoleSummary,
   ApiStatisticsSummary,
   ApiTicket,
@@ -39,6 +42,7 @@ import type {
   TestRunStatus,
   TicketPriority,
   TicketStatus,
+  ReleaseStatus,
 } from "./types";
 
 export const queryKeys = {
@@ -57,6 +61,9 @@ export const queryKeys = {
   epicHistory: (id: number) => ["epic-history", id] as const,
   epicBlockers: (id: number) => ["epic-blockers", id] as const,
   epicTestRuns: (id: number) => ["epic-test-runs", id] as const,
+  releases: (params?: Record<string, unknown>) => ["releases", params ?? {}] as const,
+  release: (id: number) => ["release", id] as const,
+  releaseOverview: (id: number, target?: string | null) => ["release-overview", id, target ?? null] as const,
   notifications: ["notifications"] as const,
   activity: (params?: Record<string, unknown>) => ["activity", params ?? {}] as const,
   roleSummary: ["role-summary"] as const,
@@ -108,7 +115,6 @@ export type UpdateMeRequest = Partial<
   telegram_id?: string | null;
   matrix_id?: string | null;
   matrix_dm_room_id?: string | null;
-  kanban_token?: string | null;
   current_password?: string;
   new_password?: string;
 };
@@ -121,11 +127,55 @@ export function useUpdateMe() {
   });
 }
 
-export function useKanbanConnect() {
+export type Integration = {
+  type: "kanban" | "jira" | "testops";
+  endpoint: string;
+  auth_type: "token" | "basic";
+  username: string | null;
+  credentials_configured: boolean;
+  last_checked_at: string | null;
+  last_check_status: "never" | "success" | "failed" | "credential_unreadable";
+  last_check_error: string | null;
+};
+
+export function useIntegrations(enabled = true) {
+  return useQuery({
+    queryKey: ["integrations"] as const,
+    queryFn: () => api.get<Integration[]>("/integrations"),
+    enabled,
+  });
+}
+
+export function useSaveIntegration() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { email: string; password: string }) => api.post<ApiMe>("/auth/kanban-connect", body),
-    onSuccess: (data) => qc.setQueryData(queryKeys.me, data),
+    mutationFn: ({ type, body }: { type: "jira" | "testops"; body: Record<string, unknown> }) =>
+      api.patch<Integration>(`/integrations/${type}`, body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["integrations"] }),
+  });
+}
+
+export function useConnectKanbanIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { endpoint: string; email: string; password: string }) => api.post<Integration>("/integrations/kanban/connect", body),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["integrations"] }),
+  });
+}
+
+export function useCheckIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (type: Integration["type"]) => api.post<Integration>(`/integrations/${type}/check`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["integrations"] }),
+  });
+}
+
+export function useDisconnectIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (type: Integration["type"]) => api.delete(`/integrations/${type}/credentials`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["integrations"] }),
   });
 }
 
@@ -135,6 +185,26 @@ export function useKanbanProjects(enabled = true) {
     queryFn: () => api.get<{ id: number | null; slug: string; name: string }[]>("/kanban/projects"),
     staleTime: 60_000,
     enabled,
+  });
+}
+
+export type EpicJiraIssue = { key: string; summary: string; status: string; priority: string | null; assignee: string | null; issue_type: string | null; url: string };
+export type EpicJiraIssuePage = { items: EpicJiraIssue[]; total: number; page: number; page_size: number; refreshed_at: string | null };
+
+export function useEpicJiraIssues(id: number, page: number, enabled = true) {
+  return useQuery({
+    queryKey: ["epic-jira-issues", id, page],
+    queryFn: () => api.get<EpicJiraIssuePage>(`/epics/${id}/jira-issues`, { query: { page, page_size: 25 } }),
+    enabled,
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useRefreshEpicJiraIssues(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<EpicJiraIssuePage>(`/epics/${id}/jira-issues/refresh`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["epic-jira-issues", id] }),
   });
 }
 
@@ -763,6 +833,110 @@ export function useClaimTicketAssignee(ticketId: number) {
       await qc.invalidateQueries({ queryKey: queryKeys.ticketReassignCandidates(ticketId) });
       bumpDataVersion();
     },
+  });
+}
+
+// --- Releases ---
+
+export type ReleaseListParams = {
+  q?: string;
+  project_id?: number;
+  status?: ReleaseStatus;
+  owner_user_id?: number;
+  overdue?: boolean;
+  archived?: boolean;
+  page?: number;
+  page_size?: number;
+};
+
+export function useReleases(params: ReleaseListParams = {}) {
+  return useQuery({
+    queryKey: queryKeys.releases(params),
+    queryFn: () => api.get<ApiReleasePage>("/releases", { query: params }),
+    placeholderData: (previous) => previous,
+  });
+}
+
+export function useRelease(id: number | null) {
+  return useQuery({
+    queryKey: queryKeys.release(id ?? -1),
+    queryFn: () => api.get<ApiRelease>(`/releases/${id}`),
+    enabled: id != null && id > 0,
+  });
+}
+
+export function useReleaseOverview(id: number | null, targetStatus?: ReleaseStatus | null, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.releaseOverview(id ?? -1, targetStatus),
+    queryFn: () => api.get<ApiReleaseOverview>(`/releases/${id}/overview`, { query: targetStatus ? { target_status: targetStatus } : {} }),
+    enabled: enabled && id != null && id > 0,
+  });
+}
+
+export function useReleaseTab<T = unknown>(id: number | null, tab: "tasks" | "qa" | "questions" | "history" | "time-management/summary" | "time-management/tasks" | "time-management/worklogs", params: Record<string, unknown> = {}, enabled = true) {
+  return useQuery({
+    queryKey: ["release-tab", id, tab, params] as const,
+    queryFn: () => api.get<T>(`/releases/${id}/${tab}`, { query: params }),
+    enabled: enabled && id != null && id > 0,
+    placeholderData: (previous) => previous,
+  });
+}
+
+function invalidateReleaseQueries(qc: QueryClient, releaseId?: number): Promise<unknown[]> {
+  return Promise.all([
+    qc.invalidateQueries({ queryKey: ["releases"] }),
+    qc.invalidateQueries({ queryKey: ["release-overview"] }),
+    qc.invalidateQueries({ queryKey: ["release-tab"] }),
+    ...(releaseId ? [qc.invalidateQueries({ queryKey: queryKeys.release(releaseId) })] : []),
+    qc.invalidateQueries({ queryKey: ["epics"] }),
+  ]);
+}
+
+export function useCreateRelease() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { project_id: number; title: string; description?: string | null; planned_release_at?: string | null; owner_user_id?: number | null; epic_ids?: number[] }) => api.post<ApiRelease>("/releases", body),
+    onSuccess: (release) => invalidateReleaseQueries(qc, release.id),
+  });
+}
+
+export function useUpdateRelease(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: Record<string, unknown>) => api.patch<ApiRelease>(`/releases/${id}`, body),
+    onSuccess: () => invalidateReleaseQueries(qc, id),
+  });
+}
+
+export function useTransitionRelease(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { target_status: ReleaseStatus; release_note?: string | null }) => api.post<{ release: ApiRelease; assessment: ApiReleaseOverview }>(`/releases/${id}/status-transitions`, body),
+    onSuccess: () => invalidateReleaseQueries(qc, id),
+  });
+}
+
+export function useManageReleaseEpics(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { epic_ids: number[]; correction_reason?: string }) => api.post<ApiRelease>(`/releases/${id}/epics`, body),
+    onSuccess: () => invalidateReleaseQueries(qc, id),
+  });
+}
+
+export function useRefreshRelease(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<{ outcome: string; results: Array<Record<string, unknown>> }>(`/releases/${id}/refresh`),
+    onSuccess: () => invalidateReleaseQueries(qc, id),
+  });
+}
+
+export function useReleaseEpicOptions(projectId: number | null, search = "", enabled = true) {
+  return useQuery({
+    queryKey: ["release-epic-options", projectId, search] as const,
+    queryFn: () => api.get<{ items: Array<{ id: number; key: string; title: string; status: string; available: boolean; disabled_reason: string | null; active_release?: { id: number; key: string; title: string } | null }>; total: number }>("/releases/epic-options", { query: { project_id: projectId, q: search, page: 1, page_size: 100 } }),
+    enabled: enabled && projectId != null,
   });
 }
 

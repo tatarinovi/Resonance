@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from ..config import get_settings
 from ..database import get_db
 from ..deps import require_admin
+from ..integration_service import require_global_kanban_token
 from ..kanban_client import KanbanClient, normalize_person
 from ..kanban_member_roles import (
     KanbanProjectMemberRole,
@@ -78,10 +79,8 @@ def _kanban_stages_standalone(token: str) -> list[dict[str, Any]]:
     return KanbanClient(token=token).stages()
 
 
-def _require_kanban_client(user: User) -> KanbanClient:
-    if not user.kanban_token:
-        raise HTTPException(status_code=409, detail="Kanban не подключён для этого пользователя.")
-    return KanbanClient(token=user.kanban_token)
+def _require_kanban_client(db: Session) -> KanbanClient:
+    return KanbanClient(token=require_global_kanban_token(db))
 
 
 @router.get("/projects", response_model=list[KanbanProjectRead])
@@ -89,8 +88,7 @@ def kanban_projects(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> list[KanbanProjectRead]:
-    _ = db
-    client = _require_kanban_client(user)
+    client = _require_kanban_client(db)
     projects = client.projects()
 
     reads: list[KanbanProjectRead] = []
@@ -118,8 +116,7 @@ def kanban_project_epics(
     user: User = Depends(require_admin),
 ) -> list[dict[str, Any]]:
     """Справочник эпиков проекта (имя + id) для фильтров и форм; DS GET /project/{slug}/list, type_id=5."""
-    _ = db
-    client = _require_kanban_client(user)
+    client = _require_kanban_client(db)
     rows = client.project_epics_catalog(slug)
     out: list[dict[str, Any]] = []
     seen: set[int] = set()
@@ -148,8 +145,8 @@ def kanban_project_member_roles_get(
     user: User = Depends(require_admin),
 ) -> dict[str, Any]:
     """Роли участников проекта: значения из глобальной карты Kanban user id → роль (общие для всех проектов)."""
-    client = _require_kanban_client(user)
-    token = user.kanban_token or ""
+    client = _require_kanban_client(db)
+    token = require_global_kanban_token(db)
     project_users = _kanban_project_users_standalone(token, slug)
     role_map = load_project_role_map(db, slug)
     members: list[dict[str, Any]] = []
@@ -178,8 +175,8 @@ def kanban_project_member_roles_put(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> dict[str, Any]:
-    client = _require_kanban_client(user)
-    token = user.kanban_token or ""
+    client = _require_kanban_client(db)
+    token = require_global_kanban_token(db)
     project_users = _kanban_project_users_standalone(token, slug)
     allowed = {int(u.get("id") or 0) for u in project_users if isinstance(u, dict) and int(u.get("id") or 0) > 0}
     mapping: dict[int, KanbanProjectMemberRole] = {}
@@ -202,13 +199,12 @@ def kanban_project_bundle(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> dict[str, Any]:
-    _ = db
     cached = _bundle_cache_get(user.id, slug, only_mine)
     if cached is not None:
         return cached
 
-    client = _require_kanban_client(user)
-    token = user.kanban_token or ""
+    client = _require_kanban_client(db)
+    token = require_global_kanban_token(db)
     project = client.project_detail(slug)
     flow = project.get("flow") if isinstance(project, dict) else None
     possible_stages = flow.get("possibleProjectStages") if isinstance(flow, dict) else None
@@ -253,8 +249,7 @@ def kanban_reference_task_types(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> list[dict[str, Any]]:
-    _ = db
-    return _require_kanban_client(user).task_types()
+    return _require_kanban_client(db).task_types()
 
 
 @router.get("/reference/priorities")
@@ -262,8 +257,7 @@ def kanban_reference_priorities(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> list[dict[str, Any]]:
-    _ = db
-    return _require_kanban_client(user).priorities()
+    return _require_kanban_client(db).priorities()
 
 
 @router.get("/reference/components")
@@ -271,8 +265,7 @@ def kanban_reference_components(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> list[dict[str, Any]]:
-    _ = db
-    return _require_kanban_client(user).components()
+    return _require_kanban_client(db).components()
 
 
 @router.get("/tasks/{task_id}")
@@ -281,8 +274,7 @@ def kanban_task_detail(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> dict[str, Any]:
-    _ = db
-    return _require_kanban_client(user).task(task_id)
+    return _require_kanban_client(db).task(task_id)
 
 
 @router.patch("/tasks/{task_id}")
@@ -292,8 +284,7 @@ def kanban_task_patch(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> Any:
-    _ = db
-    out = _require_kanban_client(user).patch_task(task_id, body)
+    out = _require_kanban_client(db).patch_task(task_id, body)
     _bundle_cache_invalidate_for_user(user.id)
     return out
 
@@ -305,8 +296,7 @@ def kanban_project_create_task(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> Any:
-    _ = db
-    out = _require_kanban_client(user).post_project_task(slug, body)
+    out = _require_kanban_client(db).post_project_task(slug, body)
     _bundle_cache_invalidate_project(user.id, slug)
     return out
 
@@ -317,8 +307,7 @@ def kanban_task_comments(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> list[dict[str, Any]]:
-    _ = db
-    return _require_kanban_client(user).task_comments(task_id)
+    return _require_kanban_client(db).task_comments(task_id)
 
 
 @router.post("/tasks/{task_id}/comments")
@@ -328,8 +317,7 @@ def kanban_task_post_comment(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> Any:
-    _ = db
-    return _require_kanban_client(user).post_task_comment(task_id, body)
+    return _require_kanban_client(db).post_task_comment(task_id, body)
 
 
 @router.get("/tasks/{task_id}/work")
@@ -338,8 +326,7 @@ def kanban_task_work(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> list[dict[str, Any]]:
-    _ = db
-    return _require_kanban_client(user).task_worklogs(task_id)
+    return _require_kanban_client(db).task_worklogs(task_id)
 
 
 @router.post("/tasks/{task_id}/work")
@@ -349,8 +336,7 @@ def kanban_task_post_work(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> Any:
-    _ = db
-    return _require_kanban_client(user).post_task_work(task_id, body if body is not None else {})
+    return _require_kanban_client(db).post_task_work(task_id, body if body is not None else {})
 
 
 @router.post("/tasks/{task_id}/estimates")
@@ -360,8 +346,7 @@ def kanban_task_post_estimate(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> Any:
-    _ = db
-    return _require_kanban_client(user).post_task_estimate(task_id, body)
+    return _require_kanban_client(db).post_task_estimate(task_id, body)
 
 
 @router.post("/tasks/{task_id}/checklist")
@@ -371,8 +356,7 @@ def kanban_task_post_checklist(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> Any:
-    _ = db
-    return _require_kanban_client(user).post_task_checklist(task_id, body)
+    return _require_kanban_client(db).post_task_checklist(task_id, body)
 
 
 @router.patch("/checklist-points/{point_id}")
@@ -382,5 +366,4 @@ def kanban_checklist_point_patch(
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ) -> Any:
-    _ = db
-    return _require_kanban_client(user).patch_checklist_point(point_id, body)
+    return _require_kanban_client(db).patch_checklist_point(point_id, body)

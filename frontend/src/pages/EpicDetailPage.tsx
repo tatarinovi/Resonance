@@ -35,6 +35,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Layers, ArrowLeft, ExternalLink, AlertTriangle, CheckSquare, Square, Send, Calendar, Loader2, Pencil, Plus, Trash2, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 import type { ApiEpicTestPlanItem } from "@/lib/types";
+import { Input } from "@/components/ui/input";
 
 import {
   QA_STATUS_FROM_REF,
@@ -50,6 +51,8 @@ import {
   useCreateTestRun,
   useDeleteEpic,
   useEpic,
+  useEpicJiraIssues,
+  useRefreshEpicJiraIssues,
   useReferenceData,
   useTickets,
   useToggleEpicQAItem,
@@ -57,6 +60,9 @@ import {
   useUpdateEpic,
   useUpdateEpicQA,
   useUpdateTestRun,
+  useCreateRelease,
+  useManageReleaseEpics,
+  useReleases,
 } from "@/lib/queries";
 import { isNotaWorkspace } from "@/lib/workspace";
 import { formatDate } from "@/lib/formatDateTime";
@@ -108,7 +114,8 @@ export default function EpicDetailPage() {
 
   const epicQuery = useEpic(numericId);
   const reference = useReferenceData();
-  const epicTicketsQuery = useTickets({ epic_id: numericId ?? -1, page: 1, page_size: 100 });
+  const [questionsPage, setQuestionsPage] = useState(1);
+  const epicTicketsQuery = useTickets({ epic_id: numericId ?? -1, page: questionsPage, page_size: 25 });
   const apiEpic = epicQuery.data;
   const qaApiStatus = apiEpic?.qa_block?.status ?? null;
   const isDraftQa = qaApiStatus === "draft";
@@ -124,12 +131,18 @@ export default function EpicDetailPage() {
   const deleteEpic = useDeleteEpic();
 
   const [comment, setComment] = useState("");
+  const [activeTab, setActiveTab] = useState<"overview" | "tasks" | "qa" | "questions">("overview");
+  const [jiraPage, setJiraPage] = useState(1);
   const [editEpicOpen, setEditEpicOpen] = useState(false);
   const [deleteEpicOpen, setDeleteEpicOpen] = useState(false);
+  const [releaseDialogOpen, setReleaseDialogOpen] = useState(false);
+  const [newReleaseTitle, setNewReleaseTitle] = useState("");
+  const [selectedReleaseId, setSelectedReleaseId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editStatus, setEditStatus] = useState<EpicStatus>("new");
   const [editJiraUrl, setEditJiraUrl] = useState("");
+  const [editJiraJql, setEditJiraJql] = useState("");
   const [editConfluenceUrl, setEditConfluenceUrl] = useState("");
   const [editKanbanUrl, setEditKanbanUrl] = useState("");
   const [editDesignUrl, setEditDesignUrl] = useState("");
@@ -168,6 +181,7 @@ export default function EpicDetailPage() {
     setEditNotes(apiEpic.notes ?? "");
     setEditStatus(apiEpic.status);
     setEditJiraUrl(apiEpic.jira_url ?? "");
+    setEditJiraJql(apiEpic.jira_jql ?? "");
     setEditConfluenceUrl(apiEpic.confluence_url ?? "");
     setEditKanbanUrl(apiEpic.kanban_url ?? "");
     setEditDesignUrl(apiEpic.design_url ?? "");
@@ -196,6 +210,9 @@ export default function EpicDetailPage() {
     apiEpic != null &&
     (me.role === "admin" ||
       (isCoordinatorRole(me.role) && (me.project_ids ?? []).includes(apiEpic.project_id)));
+  const releasesQuery = useReleases(apiEpic ? { project_id: apiEpic.project_id, page: 1, page_size: 100 } : {});
+  const createRelease = useCreateRelease();
+  const addToRelease = useManageReleaseEpics(selectedReleaseId ?? 0);
 
   if (epicQuery.isLoading && !epic) {
     return (
@@ -335,6 +352,7 @@ export default function EpicDetailPage() {
         ...(canEditEpicLinks
           ? {
               jira_url: editJiraUrl.trim() || "#",
+              jira_jql: editJiraJql.trim() || null,
               confluence_url: editConfluenceUrl.trim() || "",
               ...(hideKanbanUi ? {} : { kanban_url: editKanbanUrl.trim() || null }),
               design_url: editDesignUrl.trim() || null,
@@ -409,6 +427,16 @@ export default function EpicDetailPage() {
               <h1 className="text-base md:text-lg font-semibold text-foreground flex-1 min-w-0">{epic.name}</h1>
               {((canEditEpicLinks && numericId && apiEpic) || epic.blockers.length > 0) && (
                 <div className="flex flex-shrink-0 items-center gap-2 flex-wrap justify-end">
+                  {canEditEpicLinks && numericId && apiEpic && !apiEpic.active_release && (
+                    <button
+                      type="button"
+                      onClick={() => setReleaseDialogOpen(true)}
+                      className="flex h-7 items-center gap-1 rounded-md border border-border px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/50 hover:text-foreground"
+                    >
+                      <Plus size={12} />
+                      Добавить в релиз
+                    </button>
+                  )}
                   {canEditEpicLinks && numericId && apiEpic && (
                     <button
                       type="button"
@@ -430,6 +458,7 @@ export default function EpicDetailPage() {
               )}
             </div>
             <p className="text-sm text-foreground/75 leading-relaxed">{epic.description}</p>
+            {apiEpic?.active_release && <Link href={`/releases/${apiEpic.active_release.id}`}><span className="mt-2 inline-flex text-xs text-primary hover:underline">Релиз: {apiEpic.active_release.key} · {apiEpic.active_release.title}</span></Link>}
           </div>
         </div>
 
@@ -462,11 +491,19 @@ export default function EpicDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
+      <div className="mb-5 flex flex-wrap gap-2 border-b border-border pb-3">
+        {([ ["overview", "Обзор"], ["tasks", "Задачи"], ["qa", "QA"], ["questions", `Вопросы (${epicQuestionsTotal})`] ] as const).map(([tab, label]) => (
+          <button key={tab} type="button" onClick={() => setActiveTab(tab)} className={`rounded-md px-3 py-1.5 text-xs font-medium ${activeTab === tab ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}>{label}</button>
+        ))}
+      </div>
+
+      {activeTab === "tasks" && numericId ? <EpicJiraTasks epicId={numericId} page={jiraPage} onPageChange={setJiraPage} canRefresh={canEditEpicLinks} /> : null}
+
+      {activeTab !== "tasks" && <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Main */}
         <div className="lg:col-span-2 space-y-4 order-2 lg:order-1">
           {/* Checklist */}
-          <div className="bg-card border border-border rounded-xl p-4 md:p-5">
+          {activeTab === "qa" && <div className="bg-card border border-border rounded-xl p-4 md:p-5">
             <div className="flex items-start justify-between gap-2 mb-1">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">QA Чеклист</h3>
             </div>
@@ -589,10 +626,10 @@ export default function EpicDetailPage() {
                   ))}
                 </div>
               )}
-          </div>
+          </div>}
 
           {/* Questions */}
-          <div className="bg-card border border-border rounded-xl p-4 md:p-5">
+          {activeTab === "questions" && <div className="bg-card border border-border rounded-xl p-4 md:p-5">
             <div className="flex items-center justify-between gap-3 mb-4">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Вопросы</h3>
               <span className="text-xs text-muted-foreground">
@@ -633,17 +670,13 @@ export default function EpicDetailPage() {
                     </div>
                   </Link>
                 ))}
-                {epicQuestionsTotal > epicQuestions.length && (
-                  <Link href={`/questions?epic_id=${numericId}`}>
-                    <span className="block pt-2 text-xs text-primary hover:underline">Все вопросы эпика</span>
-                  </Link>
-                )}
+                {epicQuestionsTotal > 25 && <div className="flex items-center justify-end gap-2 pt-2 text-xs"><button type="button" disabled={questionsPage <= 1} onClick={() => setQuestionsPage((value) => value - 1)} className="rounded border border-border px-2 py-1 disabled:opacity-50">Назад</button><span>{questionsPage} / {Math.max(1, Math.ceil(epicQuestionsTotal / 25))}</span><button type="button" disabled={questionsPage >= Math.ceil(epicQuestionsTotal / 25)} onClick={() => setQuestionsPage((value) => value + 1)} className="rounded border border-border px-2 py-1 disabled:opacity-50">Вперёд</button></div>}
               </div>
             )}
-          </div>
+          </div>}
 
           {/* Test Runs */}
-          <div className="bg-card border border-border rounded-xl p-4 md:p-5">
+          {activeTab === "qa" && <div className="bg-card border border-border rounded-xl p-4 md:p-5">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Тест-раны</h3>
               {canManageTestRuns && availableTestRunEnvs.length > 0 && (
@@ -744,10 +777,10 @@ export default function EpicDetailPage() {
                 </tbody>
               </table>
             </div>
-          </div>
+          </div>}
 
           {/* Comments */}
-          <div className="bg-card border border-border rounded-xl p-4 md:p-5">
+          {activeTab === "overview" && <div className="bg-card border border-border rounded-xl p-4 md:p-5">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">Комментарии</h3>
             {allComments.length === 0
               ? <p className="text-sm text-muted-foreground">Комментариев нет</p>
@@ -790,18 +823,18 @@ export default function EpicDetailPage() {
                 Отправить
               </button>
             </div>
-          </div>
+          </div>}
 
           {/* History */}
-          <div className="bg-card border border-border rounded-xl p-4 md:p-5">
+          {activeTab === "overview" && <div className="bg-card border border-border rounded-xl p-4 md:p-5">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">История</h3>
             <Timeline events={history} />
-          </div>
+          </div>}
         </div>
 
         {/* Sidebar */}
         <div className="space-y-4 order-1 lg:order-2">
-          {canTransitionQaStatus && qaActions.length > 0 && (
+          {activeTab === "qa" && canTransitionQaStatus && qaActions.length > 0 && (
             <div className="bg-card border border-primary/20 rounded-xl p-4">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">QA-статус тестирования</h3>
               <p className="text-[11px] text-muted-foreground mb-3">
@@ -823,7 +856,7 @@ export default function EpicDetailPage() {
             </div>
           )}
 
-          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+          {activeTab === "overview" && <div className="bg-card border border-border rounded-xl p-4 space-y-3">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Ответственные</h3>
             {[["Лид аналитики", epic.leadAnalystId], ["Лид дизайна", epic.leadDesignerId]].map(([role, uid]) => {
               const user = users.find(u => u.id === uid);
@@ -843,9 +876,9 @@ export default function EpicDetailPage() {
                 </div>
               );
             })}
-          </div>
+          </div>}
 
-          <div className="bg-card border border-border rounded-xl p-4 space-y-2">
+          {activeTab === "overview" && <div className="bg-card border border-border rounded-xl p-4 space-y-2">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Ссылки</h3>
             {(hideKanbanUi
               ? [["Jira Epic", epic.jiraLink], ["Figma/Design", epic.designLink]]
@@ -857,17 +890,17 @@ export default function EpicDetailPage() {
                 <span>{l as string}</span>
               </a>
             ))}
-          </div>
+          </div>}
 
-          <div className="bg-card border border-border rounded-xl p-4 space-y-2.5">
+          {activeTab === "overview" && <div className="bg-card border border-border rounded-xl p-4 space-y-2.5">
             <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Сроки</h3>
             <div className="grid grid-cols-2 lg:grid-cols-1 gap-2">
               <InfoItem icon={Calendar} label="Старт" value={formatDate(epic.startDate)} />
               <InfoItem icon={Calendar} label="Целевая дата" value={formatDate(epic.targetDate)} />
             </div>
-          </div>
+          </div>}
 
-          {epic.blockers.length > 0 && (
+          {activeTab === "overview" && epic.blockers.length > 0 && (
             <div className="bg-card border border-destructive/20 rounded-xl p-4">
               <h3 className="text-xs font-semibold text-destructive uppercase tracking-wide mb-3">Блокеры</h3>
               <div className="space-y-2.5">
@@ -884,21 +917,8 @@ export default function EpicDetailPage() {
             </div>
           )}
 
-          {epicQuestions.length > 0 && (
-            <div className="bg-card border border-border rounded-xl p-4">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Открытые вопросы ({epicQuestionsTotal})</h3>
-              {epicQuestions.map(q => (
-                <Link key={q.id} href={`/questions/${q.id}`}>
-                  <div className="flex items-center gap-2 py-1.5 cursor-pointer hover:text-primary transition-colors">
-                    <span className="text-[10px] text-muted-foreground font-mono">{q.id}</span>
-                    <span className="text-xs text-foreground truncate">{q.title}</span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          )}
         </div>
-      </div>
+      </div>}
 
       <Dialog open={editEpicOpen} onOpenChange={setEditEpicOpen}>
         <DialogContent className="sm:max-w-lg mx-4 max-h-[min(90vh,720px)] overflow-y-auto">
@@ -963,6 +983,10 @@ export default function EpicDetailPage() {
                           placeholder="https://…"
                           className="mt-1 w-full px-3 py-2 text-sm bg-background border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50"
                         />
+                      </div>
+                      <div>
+                        <label className="text-[11px] text-muted-foreground font-medium" htmlFor="epic-edit-jql">Jira JQL</label>
+                        <textarea id="epic-edit-jql" value={editJiraJql} onChange={(e) => setEditJiraJql(e.target.value)} placeholder="project = MAG AND parent = MAG-123" className="mt-1 min-h-20 w-full px-3 py-2 text-sm bg-background border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50" />
                       </div>
                       <div>
                         <label className="text-[11px] text-muted-foreground font-medium" htmlFor="epic-edit-conf">Confluence</label>
@@ -1102,6 +1126,40 @@ export default function EpicDetailPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={releaseDialogOpen} onOpenChange={setReleaseDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Добавить в релиз</DialogTitle>
+            <DialogDescription>Выберите активный релиз проекта или создайте новый.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Существующий релиз</p>
+              <Select value={selectedReleaseId?.toString() ?? ""} onValueChange={(value) => setSelectedReleaseId(Number(value))}>
+                <SelectTrigger><SelectValue placeholder="Выберите релиз" /></SelectTrigger>
+                <SelectContent>
+                  {(releasesQuery.data?.items ?? []).filter((release) => ["draft", "in_progress", "ready"].includes(release.status)).map((release) => (
+                    <SelectItem key={release.id} value={String(release.id)}>{release.key} · {release.title}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <button type="button" disabled={!selectedReleaseId || !numericId || addToRelease.isPending} onClick={async () => {
+                if (!numericId) return;
+                try { await addToRelease.mutateAsync({ epic_ids: [numericId] }); toast.success("Эпик добавлен в релиз"); setReleaseDialogOpen(false); await epicQuery.refetch(); } catch (error) { toast.error(error instanceof Error ? error.message : "Не удалось добавить эпик"); }
+              }} className="w-full rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50">Добавить</button>
+            </div>
+            <div className="border-t border-border pt-4 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Создать новый релиз</p>
+              <Input value={newReleaseTitle} onChange={(event) => setNewReleaseTitle(event.target.value)} placeholder="Название нового релиза" />
+              <button type="button" disabled={!newReleaseTitle.trim() || !numericId || !apiEpic || createRelease.isPending} onClick={async () => {
+                if (!numericId || !apiEpic) return;
+                try { const release = await createRelease.mutateAsync({ project_id: apiEpic.project_id, title: newReleaseTitle.trim(), epic_ids: [numericId] }); toast.success(`Релиз ${release.key} создан`); setReleaseDialogOpen(false); setLocation(`/releases/${release.id}`); } catch (error) { toast.error(error instanceof Error ? error.message : "Не удалось создать релиз"); }
+              }} className="w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted disabled:opacity-50">Создать новый релиз</button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <AlertDialog open={deleteEpicOpen} onOpenChange={setDeleteEpicOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -1135,5 +1193,36 @@ function InfoItem({ icon: Icon, label, value }: { icon: typeof Calendar; label: 
       <span className="text-[10px] text-muted-foreground">{label}:</span>
       <span className="text-xs text-foreground">{value}</span>
     </div>
+  );
+}
+
+function EpicJiraTasks({ epicId, page, onPageChange, canRefresh }: { epicId: number; page: number; onPageChange: (page: number) => void; canRefresh: boolean }) {
+  const tasks = useEpicJiraIssues(epicId, page);
+  const refresh = useRefreshEpicJiraIssues(epicId);
+  const data = tasks.data;
+  const pageCount = Math.max(1, Math.ceil((data?.total ?? 0) / (data?.page_size ?? 25)));
+  const update = async () => {
+    try {
+      await refresh.mutateAsync();
+      onPageChange(1);
+      toast.success("Задачи Jira обновлены");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Не удалось обновить задачи Jira");
+    }
+  };
+  return (
+    <section className="rounded-xl border border-border bg-card p-4 md:p-5">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold">Задачи Jira</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{data?.refreshed_at ? `Обновлено: ${formatDate(data.refreshed_at)}` : "Список ещё не обновлялся."}</p>
+        </div>
+        {canRefresh && <button type="button" onClick={() => void update()} disabled={refresh.isPending} className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted disabled:opacity-60">{refresh.isPending ? "Обновляем…" : "Обновить задачи"}</button>}
+      </div>
+      {tasks.isLoading ? <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 size={14} className="animate-spin" />Загрузка…</div> : !data?.items.length ? <EmptyState icon={Layers} title="Задач пока нет" description="Добавьте JQL в настройках эпика и обновите список." /> : <div className="space-y-2">
+        {data.items.map((task) => <a key={task.key} href={task.url} target="_blank" rel="noreferrer" className="block rounded-lg border border-border p-3 transition-colors hover:bg-muted/50"><div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm"><span className="font-mono font-semibold">{task.key}</span><span>{task.summary}</span></div><p className="mt-1 text-xs text-muted-foreground">{[task.status, task.priority, task.issue_type, task.assignee].filter(Boolean).join(" · ")}</p></a>)}
+      </div>}
+      {pageCount > 1 && <div className="mt-4 flex items-center justify-end gap-2 text-xs"><button type="button" disabled={page <= 1} onClick={() => onPageChange(page - 1)} className="rounded border border-border px-2 py-1 disabled:opacity-50">Назад</button><span>{page} / {pageCount}</span><button type="button" disabled={page >= pageCount} onClick={() => onPageChange(page + 1)} className="rounded border border-border px-2 py-1 disabled:opacity-50">Вперёд</button></div>}
+    </section>
   );
 }

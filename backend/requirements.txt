@@ -5,6 +5,7 @@ psycopg[binary]==3.2.9
 PyJWT==2.13.0
 pydantic-settings==2.10.1
 argon2-cffi==25.1.0
+cryptography==46.0.5
 matrix-nio==0.25.2
 httpx[socks]==0.28.1
 boto3==1.37.1

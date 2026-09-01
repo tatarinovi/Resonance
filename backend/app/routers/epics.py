@@ -12,6 +12,9 @@ from ..access_policy import AccessPolicy
 from ..config import get_settings
 from ..database import get_db
 from ..deps import get_current_user, require_admin
+from ..integration_service import require_global_kanban_token
+from ..epic_jira_service import refresh_jira_issues
+from ..epic_testops_service import parse_testops_launch_id, refresh_epic_testops
 from ..kanban_member_roles import KanbanProjectMemberRole, effective_role, load_project_role_map
 from ..models import (
     Epic,
@@ -22,7 +25,10 @@ from ..models import (
     EpicQAStatus,
     EpicStatus,
     EpicTestRun,
+    EpicJiraIssue,
     EpicTestStage,
+    Release,
+    ReleaseEpicMembership,
     KanbanEpicComment,
     Ticket,
     TicketStatus,
@@ -53,6 +59,70 @@ from ..schemas import (
 
 router = APIRouter(prefix="/epics", tags=["epics"])
 settings = get_settings()
+
+
+def _jira_issue_json(item: EpicJiraIssue) -> dict:
+    return {
+        "key": item.jira_issue_key,
+        "summary": item.summary,
+        "status": item.status,
+        "priority": item.priority,
+        "assignee": item.assignee_display_name,
+        "issue_type": item.issue_type,
+        "url": item.browser_url,
+    }
+
+
+def _jira_issues_page(db: Session, epic_id: int, page: int, page_size: int) -> dict:
+    stmt = select(EpicJiraIssue).where(EpicJiraIssue.epic_id == epic_id).order_by(EpicJiraIssue.jira_issue_key)
+    total = db.scalar(select(func.count()).select_from(stmt.order_by(None).subquery())) or 0
+    items = list(db.scalars(stmt.offset((page - 1) * page_size).limit(page_size)).all())
+    refreshed_at = db.scalar(select(func.max(EpicJiraIssue.refreshed_at)).where(EpicJiraIssue.epic_id == epic_id))
+    return {"items": [_jira_issue_json(item) for item in items], "total": total, "page": page, "page_size": page_size, "refreshed_at": refreshed_at}
+
+
+@router.get("/{epic_id}/jira-issues")
+def list_jira_issues(
+    epic_id: int,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=100),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    epic = db.scalar(_epic_query().where(Epic.id == epic_id))
+    if not epic or not AccessPolicy.can_view_epic(user, epic):
+        raise HTTPException(status_code=404, detail="Epic not found")
+    return _jira_issues_page(db, epic.id, page, page_size)
+
+
+@router.post("/{epic_id}/jira-issues/refresh")
+def refresh_epic_jira_issues(
+    epic_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    epic = db.scalar(_epic_query().where(Epic.id == epic_id))
+    if not epic:
+        raise HTTPException(status_code=404, detail="Epic not found")
+    if not AccessPolicy.can_manage_epic(user, epic):
+        raise HTTPException(status_code=403, detail="Only coordinators/admins can refresh Jira tasks.")
+    refresh_jira_issues(db, epic)
+    return _jira_issues_page(db, epic.id, 1, 50)
+
+
+@router.post("/{epic_id}/testops/refresh")
+def refresh_epic_testops_data(
+    epic_id: int,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
+    epic = db.scalar(_epic_query().where(Epic.id == epic_id))
+    if not epic:
+        raise HTTPException(status_code=404, detail="Epic not found")
+    if not AccessPolicy.can_manage_epic(user, epic):
+        raise HTTPException(status_code=403, detail="Only coordinators/admins can refresh TestOps data.")
+    refreshed = refresh_epic_testops(db, epic)
+    return {"epic_id": epic.id, "refreshed_runs": refreshed}
 
 # Epic fields any project member may change (PUT /epics/{id}); ownership/title/notes/status stay coordinator-only.
 _EPIC_MEMBER_UPDATE_FIELDS = frozenset({"qa_estimate_hours"})
@@ -256,6 +326,7 @@ def _epic_read(db: Session, epic: Epic, user: User | None = None) -> EpicRead:
         "title": epic.title,
         "status": epic.status.value if hasattr(epic.status, "value") else epic.status,
         "jira_url": epic.jira_url,
+        "jira_jql": epic.jira_jql,
         "confluence_url": epic.confluence_url,
         "kanban_url": epic.kanban_url,
         "design_url": epic.design_url,
@@ -282,6 +353,19 @@ def _epic_read(db: Session, epic: Epic, user: User | None = None) -> EpicRead:
     read_obj.blockers = [_blocker_to_read(b) for b in (epic.blockers or [])]
     read_obj.test_runs = [EpicTestRunRead.model_validate(r) for r in (epic.test_runs or [])]
     read_obj.open_questions_count = _open_questions_count(db, epic.id)
+    membership = db.scalar(
+        select(ReleaseEpicMembership)
+        .options(selectinload(ReleaseEpicMembership.release))
+        .where(ReleaseEpicMembership.epic_id == epic.id, ReleaseEpicMembership.is_active.is_(True))
+    )
+    if membership and membership.release:
+        linked = membership.release
+        read_obj.active_release = {
+            "id": linked.id,
+            "key": linked.key,
+            "title": linked.title,
+            "status": linked.status.value if hasattr(linked.status, "value") else str(linked.status).lower(),
+        }
     return read_obj
 
 
@@ -746,7 +830,7 @@ def sync_epic_spent_time(
     if not AccessPolicy.can_manage_epic(user, epic):
         raise HTTPException(status_code=403, detail="Only coordinators/admins can sync spent time.")
 
-    kanban_token = user.kanban_token or settings.kanban_api_token
+    kanban_token = require_global_kanban_token(db)
     total_hours, qa_hours, qa_error = _sync_epic_spent_metrics(epic, kanban_token, db)
     epic.spent_total_hours = total_hours
     epic.spent_qa_hours = qa_hours
@@ -1067,6 +1151,7 @@ def create_test_run(
         environment=payload.environment.value,
         status=payload.status.value,
         url=payload.url.strip(),
+        testops_launch_id=payload.testops_launch_id or parse_testops_launch_id(payload.url),
     )
     db.add(run)
     db.add(EpicAuditLog(
@@ -1107,6 +1192,10 @@ def update_test_run(
         run.started_at = payload.started_at
     if payload.finished_at is not None:
         run.finished_at = payload.finished_at
+    if payload.testops_launch_id is not None:
+        run.testops_launch_id = payload.testops_launch_id.strip() or None
+    elif payload.url is not None:
+        run.testops_launch_id = parse_testops_launch_id(payload.url)
 
     db.add(EpicAuditLog(
         epic_id=epic.id,

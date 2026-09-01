@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime, timezone
 from enum import Enum
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, PlainSerializer, field_validator, model_validator
 
@@ -52,7 +52,6 @@ class UserBase(BaseModel):
     matrix_id: str | None = None
     matrix_dm_enabled: bool = False
     matrix_dm_room_id: str | None = None
-    kanban_token: str | None = None
     direction: str | None = None
     project_ids: list[int] = Field(default_factory=list)
 
@@ -103,7 +102,6 @@ class UserUpdate(BaseModel):
     matrix_id: str | None = None
     matrix_dm_enabled: bool | None = None
     matrix_dm_room_id: str | None = None
-    kanban_token: str | None = None
     direction: str | None = None
     project_ids: list[int] | None = None
 
@@ -320,7 +318,6 @@ class MeResponse(BaseModel):
     matrix_id: str | None
     matrix_dm_enabled: bool
     matrix_dm_room_id: str | None
-    kanban_connected: bool = False
     direction: str | None = None
     project_ids: list[int]
     last_login_at: ApiDatetime | None = None
@@ -331,6 +328,39 @@ class KanbanProjectRead(BaseModel):
     id: int | None = None
     slug: str
     name: str
+
+
+IntegrationType = Literal["kanban", "jira", "testops"]
+IntegrationCheckStatus = Literal["never", "success", "failed", "credential_unreadable"]
+
+
+class IntegrationRead(BaseModel):
+    type: IntegrationType
+    endpoint: str
+    auth_type: Literal["token", "basic"]
+    username: str | None = None
+    credentials_configured: bool
+    last_checked_at: ApiDatetime | None = None
+    last_check_status: IntegrationCheckStatus
+    last_check_error: str | None = None
+
+
+class JiraIntegrationPatch(BaseModel):
+    endpoint: str | None = None
+    auth_type: Literal["token", "basic"] | None = None
+    username: str | None = None
+    secret: str | None = Field(default=None, repr=False)
+
+
+class TestOpsIntegrationPatch(BaseModel):
+    endpoint: str | None = None
+    secret: str | None = Field(default=None, repr=False)
+
+
+class KanbanConnectRequest(BaseModel):
+    endpoint: str
+    email: str
+    password: str = Field(repr=False)
 
 
 class TicketPaginationResponse(BaseModel):
@@ -489,6 +519,7 @@ class EpicTestRunRead(BaseModel):
     environment: TestRunEnvironment
     status: TestRunStatus
     url: str | None
+    testops_launch_id: str | None = None
     started_at: ApiDatetime | None
     finished_at: ApiDatetime | None
     created_at: ApiDatetime
@@ -500,6 +531,7 @@ class EpicTestRunCreate(BaseModel):
     environment: TestRunEnvironment
     status: TestRunStatus = TestRunStatus.PLANNED
     url: str
+    testops_launch_id: str | None = None
 
     @field_validator("url", mode="before")
     @classmethod
@@ -517,6 +549,14 @@ class EpicTestRunUpdate(BaseModel):
     url: str | None = None
     started_at: ApiDatetime | None = None
     finished_at: ApiDatetime | None = None
+    testops_launch_id: str | None = None
+
+
+class EpicActiveReleaseRead(BaseModel):
+    id: int
+    key: str
+    title: str
+    status: Literal["draft", "in_progress", "ready"]
 
 
 class EpicRead(BaseModel):
@@ -526,6 +566,7 @@ class EpicRead(BaseModel):
     title: str
     status: EpicStatus
     jira_url: str
+    jira_jql: str | None = None
     confluence_url: str
     kanban_url: str | None = None
     design_url: str | None = None
@@ -550,6 +591,7 @@ class EpicRead(BaseModel):
     history: list[EpicAuditRead] = Field(default_factory=list)
     blockers: list[EpicBlockerRead] = Field(default_factory=list)
     test_runs: list[EpicTestRunRead] = Field(default_factory=list)
+    active_release: EpicActiveReleaseRead | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -565,6 +607,7 @@ class EpicCreate(BaseModel):
     project_id: int
     title: str
     jira_url: str
+    jira_jql: str | None = None
     confluence_url: str = ""
     kanban_url: str | None = None
     design_url: str | None = None
@@ -582,6 +625,7 @@ class EpicCreate(BaseModel):
 class EpicUpdate(BaseModel):
     title: str | None = None
     jira_url: str | None = None
+    jira_jql: str | None = None
     confluence_url: str | None = None
     kanban_url: str | None = None
     design_url: str | None = None
@@ -594,6 +638,129 @@ class EpicUpdate(BaseModel):
     status: EpicStatus | None = None
     start_date: date | None = None
     target_date: date | None = None
+
+
+# --- RELEASE SCHEMAS ---
+
+ReleaseStatusValue = Literal["draft", "in_progress", "ready", "released", "cancelled"]
+
+
+class ReleaseCapabilities(BaseModel):
+    can_edit_release: bool
+    can_manage_epics: bool
+    can_refresh_data: bool
+    can_change_status: bool
+    allowed_status_transitions: list[ReleaseStatusValue] = Field(default_factory=list)
+    can_archive: bool
+    can_delete: bool
+
+
+class ReleaseEpicSummary(BaseModel):
+    id: int
+    key: str
+    title: str
+    status: str
+    qa_status: str | None = None
+    project_id: int
+    jira_tasks_count: int = 0
+    open_questions_count: int = 0
+    blockers_count: int = 0
+    freshness: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReleaseRead(BaseModel):
+    id: int
+    key: str
+    project_id: int
+    project_name: str | None = None
+    sequence_number: int
+    title: str
+    description: str | None = None
+    status: ReleaseStatusValue
+    planned_release_at: ApiDatetime | None = None
+    released_at: ApiDatetime | None = None
+    owner_user_id: int | None = None
+    owner_username: str | None = None
+    release_note: str | None = None
+    created_by_id: int | None = None
+    archived_at: ApiDatetime | None = None
+    created_at: ApiDatetime
+    updated_at: ApiDatetime
+    epic_count: int = 0
+    risk_counts: dict[str, int] = Field(default_factory=dict)
+    open_questions_count: int = 0
+    capabilities: ReleaseCapabilities
+    epics: list[ReleaseEpicSummary] = Field(default_factory=list)
+    freshness: dict[str, Any] = Field(default_factory=dict)
+
+
+class ReleaseCreate(BaseModel):
+    project_id: int
+    title: str = Field(min_length=1, max_length=255)
+    description: str | None = None
+    planned_release_at: ApiDatetime | None = None
+    owner_user_id: int | None = None
+    epic_ids: list[int] = Field(default_factory=list)
+
+
+class ReleaseUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=255)
+    description: str | None = None
+    planned_release_at: ApiDatetime | None = None
+    owner_user_id: int | None = None
+    release_note: str | None = None
+
+
+class ReleaseTransitionRequest(BaseModel):
+    target_status: ReleaseStatusValue
+    release_note: str | None = None
+
+
+class ReleaseMembershipRequest(BaseModel):
+    epic_ids: list[int] = Field(min_length=1)
+    correction_reason: str | None = Field(default=None, max_length=500)
+
+
+class ReleaseAuditRead(BaseModel):
+    id: int
+    release_id: int
+    actor_user_id: int | None = None
+    actor_username: str | None = None
+    action: str
+    details_json: dict[str, Any]
+    created_at: ApiDatetime
+
+
+class ReleasePaginationResponse(BaseModel):
+    items: list[ReleaseRead]
+    total: int
+    page: int
+    page_size: int
+
+
+class ReleaseAuditPaginationResponse(BaseModel):
+    items: list[ReleaseAuditRead]
+    total: int
+    page: int
+    page_size: int
+
+
+class ReleaseEpicOption(BaseModel):
+    id: int
+    key: str
+    title: str
+    status: str
+    project_id: int
+    available: bool
+    disabled_reason: str | None = None
+    active_release: EpicActiveReleaseRead | None = None
+
+
+class ReleaseEpicOptionsResponse(BaseModel):
+    items: list[ReleaseEpicOption]
+    total: int
+    page: int
+    page_size: int
 
 
 class FeedbackCreate(BaseModel):

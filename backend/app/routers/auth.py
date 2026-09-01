@@ -1,13 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-import httpx
-from json import JSONDecodeError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from datetime import datetime
 
-from ..config import get_settings
 from ..database import get_db
-from ..deps import get_current_user, require_admin
+from ..deps import get_current_user
 from ..models import User, UserRole, UserWorkspace
 from ..notification_prefs import VALID_PERSONAL_CHANNEL_MODES, ensure_personal_channel_mode, get_personal_channel_mode
 from ..schemas import LoginRequest, MeResponse, RegistrationRequest, RegistrationResponse, TokenResponse
@@ -66,7 +63,6 @@ def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)) ->
         matrix_id=user.matrix_id,
         matrix_dm_enabled=user.matrix_dm_enabled,
         matrix_dm_room_id=user.matrix_dm_room_id,
-        kanban_connected=bool(user.kanban_token),
         direction=user.direction,
         project_ids=[p.id for p in user.projects],
         last_login_at=user.last_login_at,
@@ -79,26 +75,6 @@ def _normalize_optional_str(value: object) -> str | None:
         return None
     s = str(value).strip()
     return s or None
-
-
-def _extract_kanban_auth_token(response: httpx.Response) -> str:
-    if response.status_code >= 400:
-        raise HTTPException(status_code=401, detail="Invalid Kanban credentials.")
-    if not (response.content or b"").strip():
-        raise HTTPException(status_code=502, detail="Unexpected Kanban auth response.")
-
-    try:
-        data = response.json()
-    except (JSONDecodeError, ValueError) as exc:
-        raise HTTPException(status_code=502, detail="Unexpected Kanban auth response.") from exc
-
-    if not isinstance(data, dict):
-        raise HTTPException(status_code=502, detail="Unexpected Kanban auth response.")
-
-    token = data.get("token") or data.get("access_token") or (data.get("data") or {}).get("token")
-    if not token or not isinstance(token, str):
-        raise HTTPException(status_code=502, detail="Unexpected Kanban auth response.")
-    return token
 
 
 @router.put("/me", response_model=MeResponse)
@@ -128,14 +104,6 @@ def update_me(
         user.matrix_dm_enabled = payload["matrix_dm_enabled"]
     if "matrix_dm_room_id" in payload:
         user.matrix_dm_room_id = payload["matrix_dm_room_id"]
-    if "kanban_token" in payload:
-        if user.role != UserRole.ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Подключение Kanban в Resonance доступно только администраторам.",
-            )
-        user.kanban_token = payload["kanban_token"] or None
-
     if "personal_channel_mode" in payload:
         raw_mode = str(payload["personal_channel_mode"] or "").strip()
         if raw_mode not in VALID_PERSONAL_CHANNEL_MODES:
@@ -158,61 +126,11 @@ def update_me(
         matrix_id=user.matrix_id,
         matrix_dm_enabled=user.matrix_dm_enabled,
         matrix_dm_room_id=user.matrix_dm_room_id,
-        kanban_connected=bool(user.kanban_token),
         direction=user.direction,
         project_ids=[p.id for p in user.projects],
         last_login_at=user.last_login_at,
         personal_channel_mode=get_personal_channel_mode(db, user.id),
     )
-
-
-@router.post("/kanban-connect", response_model=MeResponse)
-def connect_kanban(
-    payload: dict,
-    user: User = Depends(require_admin),
-    db: Session = Depends(get_db),
-) -> MeResponse:
-    email = str(payload.get("email") or "").strip()
-    password = str(payload.get("password") or "")
-    if not email or not password:
-        raise HTTPException(status_code=400, detail="Kanban email and password are required.")
-
-    settings = get_settings()
-    base_url = settings.kanban_api_base_url.rstrip("/")
-
-    try:
-        with httpx.Client(timeout=settings.kanban_timeout_seconds) as client:
-            response = client.post(
-                f"{base_url}/auth/token",
-                params={"email": email, "password": password},
-                headers={"Accept": "application/json"},
-            )
-    except httpx.HTTPError as exc:
-        raise HTTPException(status_code=502, detail=f"Kanban auth failed: {exc}") from exc
-
-    token = _extract_kanban_auth_token(response)
-
-    user.kanban_token = token
-    db.commit()
-
-    return MeResponse(
-        id=user.id,
-        username=user.username,
-        role=user.role,
-        workspace=user.workspace or UserWorkspace.DS.value,
-        telegram_id=user.telegram_id,
-        telegram_notifications=user.telegram_notifications,
-        is_approved=user.is_approved,
-        matrix_id=user.matrix_id,
-        matrix_dm_enabled=user.matrix_dm_enabled,
-        matrix_dm_room_id=user.matrix_dm_room_id,
-        kanban_connected=True,
-        direction=user.direction,
-        project_ids=[p.id for p in user.projects],
-        last_login_at=user.last_login_at,
-        personal_channel_mode=get_personal_channel_mode(db, user.id),
-    )
-
 
 @router.get("/telegram-link")
 async def get_telegram_link(

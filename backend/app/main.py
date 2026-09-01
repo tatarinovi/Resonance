@@ -10,7 +10,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from .bootstrap import bootstrap_database
 from .config import get_settings
 from .correlation_middleware import CorrelationMiddleware
-from .kanban_legacy_poll_service import kanban_legacy_poll_once
 from .realtime import bus
 from .routers import (
     activity,
@@ -22,9 +21,11 @@ from .routers import (
     epics,
     feedback,
     files,
+    integrations,
     kanban,
     notifications,
     reference,
+    releases,
     stream,
 )
 
@@ -36,7 +37,6 @@ logging.basicConfig(
     force=True,
 )
 logger = logging.getLogger("matrix-hub")
-poll_logger = logging.getLogger(__name__)
 
 settings = get_settings()
 app = FastAPI(
@@ -69,22 +69,10 @@ app.add_middleware(
 
 app.add_middleware(CorrelationMiddleware)
 
-
-async def _kanban_legacy_poll_loop() -> None:
-    """Runs in API process so `publish_event` reaches SSE subscribers (same in-memory bus as `/stream`)."""
-    while True:
-        try:
-            await asyncio.to_thread(kanban_legacy_poll_once)
-        except Exception:
-            poll_logger.exception("Kanban legacy poll iteration failed")
-        await asyncio.sleep(15)
-
-
 @app.on_event("startup")
 async def on_startup() -> None:
     bootstrap_database(run_migrations=settings.run_migrations_on_startup)
     bus.attach_loop(asyncio.get_running_loop())
-    asyncio.create_task(_kanban_legacy_poll_loop())
 
 
 @app.get("/health")
@@ -115,10 +103,12 @@ app.include_router(dashboard.router, prefix=settings.api_prefix)
 app.include_router(epics.router, prefix=settings.api_prefix)
 app.include_router(feedback.router, prefix=settings.api_prefix)
 app.include_router(files.router, prefix=settings.api_prefix)
+app.include_router(integrations.router, prefix=settings.api_prefix)
 app.include_router(analytics.router, prefix=settings.api_prefix)
 app.include_router(kanban.router, prefix=settings.api_prefix)
 app.include_router(notifications.router, prefix=settings.api_prefix)
 app.include_router(activity.router, prefix=settings.api_prefix)
 app.include_router(reference.router, prefix=settings.api_prefix)
+app.include_router(releases.router, prefix=settings.api_prefix)
 app.include_router(aggregates.router, prefix=settings.api_prefix)
 app.include_router(stream.router, prefix=settings.api_prefix)

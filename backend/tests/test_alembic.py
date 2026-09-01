@@ -42,6 +42,7 @@ def test_migration_filenames_match_expectations():
         "0005_ticket_events",
         "0006_epic_blockers",
         "0007_epic_test_runs",
+        "0018_release_center",
     }
     versions_dir = BACKEND_ROOT / "migrations" / "versions"
     actual = {p.stem for p in versions_dir.glob("*.py") if not p.stem.startswith("__")}

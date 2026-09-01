@@ -13,6 +13,8 @@ import ActivityPage from "@/pages/ActivityPage";
 import DashboardPage from "@/pages/DashboardPage";
 import EpicDetailPage from "@/pages/EpicDetailPage";
 import EpicsPage from "@/pages/EpicsPage";
+import ReleasesPage from "@/pages/ReleasesPage";
+import ReleaseDetailPage from "@/pages/ReleaseDetailPage";
 import AdminFeedbackPage from "@/pages/AdminFeedbackPage";
 import FeedbackPage from "@/pages/FeedbackPage";
 import InboxPage from "@/pages/InboxPage";
@@ -74,6 +76,8 @@ export default function App() {
               <Route path="/questions/:id" element={<ShellRoute><QuestionDetailPage /></ShellRoute>} />
               <Route path="/epics" element={<ShellRoute><EpicsPage /></ShellRoute>} />
               <Route path="/epics/:id" element={<ShellRoute><EpicDetailPage /></ShellRoute>} />
+              <Route path="/releases" element={<ShellRoute><ReleasesPage /></ShellRoute>} />
+              <Route path="/releases/:id" element={<ShellRoute><ReleaseDetailPage /></ShellRoute>} />
               <Route path="/activity" element={<ShellRoute><ActivityPage /></ShellRoute>} />
               <Route path="/statistics" element={<ShellRoute><StatisticsPage /></ShellRoute>} />
               <Route path="/users" element={<ShellRoute><RequireAdmin><UsersPage /></RequireAdmin></ShellRoute>} />

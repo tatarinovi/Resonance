@@ -17,6 +17,12 @@ describe("navigation sections", () => {
       "Наблюдение",
       "Система",
     ]);
+    expect(VISIBLE_NAVIGATION_SECTIONS.find((section) => section.id === "work")?.items.map((item) => item.label)).toEqual([
+      "Вопросы",
+      "Эпики",
+      "Релизы",
+      "Проекты",
+    ]);
   });
 
   it("shows only default focus links until filtered views have results", () => {

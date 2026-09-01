@@ -63,7 +63,7 @@ class FakeKanbanClient:
 
 
 def test_kanban_epic_charts_live_returns_built_detail(monkeypatch):
-    monkeypatch.setattr(analytics, "_kanban_client_for_user", lambda user: FakeKanbanClient())
+    monkeypatch.setattr(analytics, "_kanban_client", lambda db: FakeKanbanClient())
 
     result = analytics.kanban_epic_charts_live(
         100,

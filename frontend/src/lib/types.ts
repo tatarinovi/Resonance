@@ -28,7 +28,6 @@ export interface ApiUser {
 export type PersonalChannelMode = "in_app_only" | "matrix_preferred" | "telegram_preferred" | "both";
 
 export interface ApiMe extends ApiUser {
-  kanban_connected: boolean;
   personal_channel_mode?: PersonalChannelMode;
 }
 
@@ -259,6 +258,7 @@ export interface ApiEpicTestRun {
   environment: EpicTestStage;
   status: TestRunStatus;
   url: string | null;
+  testops_launch_id?: string | null;
   started_at: string | null;
   finished_at: string | null;
   created_at: string;
@@ -271,6 +271,7 @@ export interface ApiEpic {
   title: string;
   status: EpicStatus;
   jira_url: string;
+  jira_jql?: string | null;
   confluence_url: string;
   kanban_url: string | null;
   design_url: string | null;
@@ -294,9 +295,87 @@ export interface ApiEpic {
   history: ApiEpicAudit[];
   blockers: ApiEpicBlocker[];
   test_runs: ApiEpicTestRun[];
+  active_release?: { id: number; key: string; title: string; status: "draft" | "in_progress" | "ready" } | null;
 }
 
 export type ApiEpicPage = ApiPage<ApiEpic>;
+
+export type ReleaseStatus = "draft" | "in_progress" | "ready" | "released" | "cancelled";
+
+export interface ApiReleaseCapabilities {
+  can_edit_release: boolean;
+  can_manage_epics: boolean;
+  can_refresh_data: boolean;
+  can_change_status: boolean;
+  allowed_status_transitions: ReleaseStatus[];
+  can_archive: boolean;
+  can_delete: boolean;
+}
+
+export interface ApiReleaseEpicSummary {
+  id: number;
+  key: string;
+  title: string;
+  status: string;
+  qa_status: string | null;
+  project_id: number;
+  jira_tasks_count: number;
+  open_questions_count: number;
+  blockers_count: number;
+  freshness: Record<string, unknown>;
+}
+
+export interface ApiRelease {
+  id: number;
+  key: string;
+  project_id: number;
+  project_name: string | null;
+  sequence_number: number;
+  title: string;
+  description: string | null;
+  status: ReleaseStatus;
+  planned_release_at: string | null;
+  released_at: string | null;
+  owner_user_id: number | null;
+  owner_username: string | null;
+  release_note: string | null;
+  created_by_id: number | null;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+  epic_count: number;
+  risk_counts: Record<string, number>;
+  open_questions_count: number;
+  capabilities: ApiReleaseCapabilities;
+  epics: ApiReleaseEpicSummary[];
+  freshness: Record<string, unknown>;
+}
+
+export type ApiReleasePage = ApiPage<ApiRelease>;
+
+export interface ApiReleaseAttention {
+  kind: string;
+  source: string;
+  severity: string;
+  epic: { id: number; key: string; title: string };
+  entity?: { key?: string; title?: string; url?: string } | null;
+  message: string;
+  timestamp?: string | null;
+}
+
+export interface ApiReleaseAssessment {
+  readiness: "has_risks" | "no_data" | "ready";
+  actual_risks: ApiReleaseAttention[];
+  warnings: ApiReleaseAttention[];
+  data_gaps: ApiReleaseAttention[];
+  attention: ApiReleaseAttention[];
+  summary: Record<string, unknown> & { risk_counts: Record<string, number> };
+}
+
+export interface ApiReleaseOverview extends ApiReleaseAssessment {
+  release: ApiRelease;
+  target_assessment: ApiReleaseAssessment | null;
+}
 
 export interface ApiActivityEvent {
   id: string;

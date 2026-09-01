@@ -1,4 +1,4 @@
-from .models import Epic, EpicQAStatus, User, UserRole
+from .models import Epic, EpicQAStatus, Release, ReleaseStatus, User, UserRole
 
 
 def is_coordinator_role(user: User) -> bool:
@@ -62,3 +62,24 @@ class AccessPolicy:
     @staticmethod
     def can_transition_qa_status(user: User, epic: Epic) -> bool:
         return AccessPolicy.can_manage_epic(user, epic)
+
+    @staticmethod
+    def can_view_release(user: User, release: Release) -> bool:
+        return AccessPolicy.has_project_access(user, release.project_id)
+
+    @staticmethod
+    def can_manage_release(user: User, release: Release) -> bool:
+        if user.role == UserRole.ADMIN:
+            return True
+        return is_coordinator_role(user) and AccessPolicy.has_project_access(user, release.project_id)
+
+    @staticmethod
+    def release_allowed_transitions(release: Release) -> list[ReleaseStatus]:
+        current = release.status if isinstance(release.status, ReleaseStatus) else ReleaseStatus(str(release.status).lower())
+        return {
+            ReleaseStatus.DRAFT: [ReleaseStatus.IN_PROGRESS, ReleaseStatus.CANCELLED],
+            ReleaseStatus.IN_PROGRESS: [ReleaseStatus.READY, ReleaseStatus.CANCELLED],
+            ReleaseStatus.READY: [ReleaseStatus.IN_PROGRESS, ReleaseStatus.RELEASED, ReleaseStatus.CANCELLED],
+            ReleaseStatus.RELEASED: [],
+            ReleaseStatus.CANCELLED: [],
+        }[current]
