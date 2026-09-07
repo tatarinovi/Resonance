@@ -65,21 +65,22 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4">
+    <div className="min-h-dvh bg-background flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <img src="/sidebar-logo.png" alt="Resonance" className="w-12 h-12 rounded-2xl mb-4 object-cover" />
           <h1 className="text-xl font-semibold text-foreground">Resonance</h1>
-          <p className="text-sm text-muted-foreground mt-1">Вопросы, ответы и знания команды в одном месте</p>
+          <p className="text-sm text-muted-foreground mt-1 text-center">Вопросы, ответы и знания команды в одном месте</p>
         </div>
         <div className="bg-card border border-border rounded-xl p-6 shadow-lg">
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              <label htmlFor="login-username" className="block text-xs font-medium text-muted-foreground mb-1.5">
                 Логин
               </label>
               <input
                 type="text"
+                id="login-username"
                 name="username"
                 value={username}
                 onChange={(e) => {
@@ -94,11 +95,13 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+              <label htmlFor="login-password" className="block text-xs font-medium text-muted-foreground mb-1.5">
                 Пароль
               </label>
               <div className="relative">
                 <input
+                  id="login-password"
+                  name="password"
                   type={showPwd ? "text" : "password"}
                   value={password}
                   onChange={(e) => {
@@ -113,7 +116,9 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPwd((v) => !v)}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label={showPwd ? "Скрыть пароль" : "Показать пароль"}
+                  aria-pressed={showPwd}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   data-testid="button-toggle-password"
                 >
                   {showPwd ? <EyeOff size={14} /> : <Eye size={14} />}
@@ -156,7 +161,7 @@ export default function LoginPage() {
             </div>
           </form>
         </div>
-        <p className="text-center text-[11px] text-muted-foreground/50 mt-5">
+        <p className="text-center text-[11px] text-muted-foreground mt-5">
           Внутренняя система. Только для сотрудников.
         </p>
       </div>

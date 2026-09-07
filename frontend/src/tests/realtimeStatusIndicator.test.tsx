@@ -35,11 +35,11 @@ vi.mock("@/components/shared/UserAvatar", () => ({
   UserAvatar: () => <div>Avatar</div>,
 }));
 
-function renderHeader(status: RealtimeStatus) {
+function renderHeader(status: RealtimeStatus, path = "/") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={qc}>
-      <MemoryRouter initialEntries={["/"]}>
+      <MemoryRouter initialEntries={[path]}>
         <Header onMenuClick={() => undefined} realtimeStatus={status} />
       </MemoryRouter>
     </QueryClientProvider>,
@@ -78,6 +78,14 @@ describe("RealtimeStatusIndicator", () => {
 });
 
 describe("Header realtime status", () => {
+  it("identifies the release list and links release details back to it", () => {
+    const view = renderHeader("offline", "/releases");
+    expect(screen.getByRole("heading", { name: "Релизы" })).toBeInTheDocument();
+    view.unmount();
+    renderHeader("offline", "/releases/42");
+    expect(screen.getByRole("link", { name: "Релизы" })).toHaveAttribute("href", "/releases");
+    expect(screen.getByText("Релиз #42")).toBeInTheDocument();
+  });
   it("renders the realtime indicator and actions from the avatar menu", async () => {
     const user = userEvent.setup();
     renderHeader("offline");

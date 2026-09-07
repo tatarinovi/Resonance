@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from starlette.concurrency import run_in_threadpool
 
 from ..config import get_settings
 from ..deps import get_current_user
@@ -42,9 +43,9 @@ ALLOWED_EXTENSIONS = {
 
 
 def _is_allowed(filename: str | None, mime: str | None) -> bool:
-    normalized_mime = (mime or "").strip().lower()
+    normalized_mime = (mime or "").split(";", 1)[0].strip().lower()
     ext = os.path.splitext(filename or "")[1].lower()
-    if normalized_mime == "image/svg+xml" or ext == ".svg":
+    if normalized_mime in {"image/svg+xml", "text/html", "application/xhtml+xml"} or ext in {".svg", ".html", ".htm", ".xhtml"}:
         return False
     if mime:
         if any(normalized_mime.startswith(prefix) for prefix in ALLOWED_MIME_PREFIXES):
@@ -79,7 +80,10 @@ async def upload_file(
         )
 
     content = await file.read()
-    url = storage.upload_file(content, file.filename, file.content_type or "application/octet-stream")
+    url = await run_in_threadpool(
+        storage.upload_file, content, file.filename or "attachment",
+        file.content_type or "application/octet-stream",
+    )
 
     return {
         "url": url,

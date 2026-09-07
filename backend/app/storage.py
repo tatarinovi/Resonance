@@ -67,7 +67,10 @@ class S3Storage:
             Bucket=self.bucket,
             Key=unique_name,
             Body=content,
-            ContentType=content_type
+            ContentType=content_type,
+            # User-supplied MIME types cannot establish that content is safe
+            # to execute on the application's origin. Download every attachment.
+            ContentDisposition="attachment",
         )
         
         return f"{settings.s3_public_url}/{unique_name}"

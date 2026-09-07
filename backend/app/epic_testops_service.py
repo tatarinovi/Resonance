@@ -81,13 +81,25 @@ def fetch_testops_run(
             remaining = deadline - time.monotonic() if deadline is not None else None
             if remaining is not None and remaining <= 0:
                 raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Release refresh wall-clock budget exceeded.")
-            results_response = client.get(
-                f"{connection.endpoint}/api/rs/testresult",
-                params={"launchId": launch_id, "page": 0, "size": 1000},
-                timeout=min(float(timeout), remaining) if remaining is not None else timeout,
-            )
-            results_response.raise_for_status()
-            results = _items(results_response.json())
+            results: list[dict] = []
+            page = 0
+            page_size = 250
+            while True:
+                remaining = deadline - time.monotonic() if deadline is not None else None
+                if remaining is not None and remaining <= 0:
+                    raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="Release refresh wall-clock budget exceeded.")
+                results_response = client.get(
+                    f"{connection.endpoint}/api/rs/testresult",
+                    params={"launchId": launch_id, "page": page, "size": page_size},
+                    timeout=min(float(timeout), remaining) if remaining is not None else timeout,
+                )
+                results_response.raise_for_status()
+                payload = results_response.json()
+                batch = _items(payload)
+                results.extend(batch)
+                if len(batch) < page_size or (isinstance(payload, dict) and payload.get("last") is True):
+                    break
+                page += 1
     except httpx.TimeoutException:
         raise HTTPException(status_code=status.HTTP_504_GATEWAY_TIMEOUT, detail="TestOps request timed out.") from None
     except httpx.HTTPStatusError as exc:

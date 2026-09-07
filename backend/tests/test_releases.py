@@ -53,7 +53,7 @@ def _data(db):
     return project, coordinator, epic
 
 
-def test_empty_release_and_project_scoped_sequence():
+def test_empty_release_and_global_sequence():
     with _session() as db:
         project, coordinator, _ = _data(db)
         first = create_release(ReleaseCreate(project_id=project.id, title="First"), coordinator, db)
@@ -61,6 +61,13 @@ def test_empty_release_and_project_scoped_sequence():
         assert first.key == "REL-001"
         assert second.key == "REL-002"
         assert first.epic_count == 0
+
+        other_project = Project(name="Second project")
+        coordinator.projects.append(other_project)
+        db.add(other_project)
+        db.commit()
+        third = create_release(ReleaseCreate(project_id=other_project.id, title="Third"), coordinator, db)
+        assert third.key == "REL-003"
 
 
 def test_membership_becomes_inactive_after_release_but_stays_historical():

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, Link, useLocation } from "@/lib/router";
 import { epics } from "@/data/epics";
 import { users } from "@/data/users";
@@ -14,6 +14,7 @@ import { ProjectBadge } from "@/components/shared/ProjectBadge";
 import { DatePickerButton } from "@/components/shared/DatePickerButton";
 import { Timeline } from "@/components/shared/Timeline";
 import { EmptyState } from "@/components/shared/EmptyState";
+import { CreateEpicDialog } from "@/components/epics/CreateEpicDialog";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +33,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Layers, ArrowLeft, ExternalLink, AlertTriangle, CheckSquare, Square, Send, Calendar, Loader2, Pencil, Plus, Trash2, HelpCircle } from "lucide-react";
+import { Layers, ArrowLeft, ExternalLink, AlertTriangle, CheckSquare, Square, Send, Calendar, Loader2, Pencil, Plus, Trash2, HelpCircle, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import type { ApiEpicTestPlanItem } from "@/lib/types";
 import { Input } from "@/components/ui/input";
@@ -60,6 +61,7 @@ import {
   useUpdateEpic,
   useUpdateEpicQA,
   useUpdateTestRun,
+  useRefreshEpicTestOps,
   useCreateRelease,
   useManageReleaseEpics,
   useReleases,
@@ -128,6 +130,7 @@ export default function EpicDetailPage() {
   const addEpicComment = useAddEpicComment(numericId ?? -1);
   const createTestRun = useCreateTestRun(numericId ?? -1);
   const updateTestRun = useUpdateTestRun(numericId ?? -1);
+  const refreshTestOps = useRefreshEpicTestOps(numericId ?? -1);
   const deleteEpic = useDeleteEpic();
 
   const [comment, setComment] = useState("");
@@ -678,7 +681,7 @@ export default function EpicDetailPage() {
           {/* Test Runs */}
           {activeTab === "qa" && <div className="bg-card border border-border rounded-xl p-4 md:p-5">
             <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Тест-раны</h3>
+              <div className="flex items-center gap-2"><h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Тест-раны</h3>{canManageTestRuns && apiEpic?.test_runs.some((run) => run.testops_launch_id) && <button type="button" disabled={refreshTestOps.isPending} onClick={async () => { try { await refreshTestOps.mutateAsync(); toast.success("TestOps обновлён"); } catch (error) { toast.error(error instanceof Error ? error.message : "Не удалось обновить TestOps"); } }} className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-50"><RefreshCw size={11} className={refreshTestOps.isPending ? "animate-spin" : ""} />Обновить TestOps</button>}</div>
               {canManageTestRuns && availableTestRunEnvs.length > 0 && (
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-[120px_130px_minmax(160px,1fr)_auto] sm:items-center">
                   <Select value={effectiveTestRunEnv ?? "test"} onValueChange={(v) => setTestRunEnv(v as EpicTestStage)}>
@@ -776,6 +779,9 @@ export default function EpicDetailPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {apiEpic?.test_runs.map((run) => { const snapshot = run.testops_snapshot; if (!snapshot) return null; const completed = snapshot.passed + snapshot.failed + snapshot.broken + snapshot.blocked; const progress = snapshot.total ? Math.round(completed / snapshot.total * 100) : 0; return <section key={run.id} className="rounded-lg border border-border p-3"><div className="flex items-center justify-between text-xs"><b>{run.environment.toUpperCase()} · TestOps</b><span className="text-muted-foreground">{new Date(snapshot.synced_at).toLocaleString("ru-RU")}</span></div><div className="mt-2 flex items-end gap-2"><span className="text-2xl font-semibold">{progress}%</span><span className="pb-1 text-xs text-muted-foreground">{completed}/{snapshot.total}</span></div><div className="mt-2 h-1.5 rounded bg-muted"><div className="h-full rounded bg-primary" style={{ width: `${progress}%` }} /></div><div className="mt-2 flex flex-wrap gap-3 text-[11px]"><span className="text-emerald-600">{snapshot.passed} passed</span><span className="text-destructive">{snapshot.failed} failed</span><span className="text-amber-600">{snapshot.broken} broken</span><span className="text-violet-600">{snapshot.blocked} blocked</span><span>{snapshot.in_progress} in progress</span></div>{snapshot.problem_cases.length > 0 && <div className="mt-3 divide-y divide-border border-t border-border">{snapshot.problem_cases.map((testCase) => <a key={testCase.id} href={testCase.url || undefined} target="_blank" rel="noreferrer" className="block py-2 text-xs hover:text-primary"><b className="uppercase text-destructive">{testCase.status}</b> · {testCase.title}{testCase.defect_key && <span className="ml-2 font-mono text-primary">{testCase.defect_key}</span>}{testCase.comment && <span className="block text-muted-foreground">{testCase.comment}</span>}</a>)}</div>}</section>; })}
             </div>
           </div>}
 
@@ -920,245 +926,7 @@ export default function EpicDetailPage() {
         </div>
       </div>}
 
-      <Dialog open={editEpicOpen} onOpenChange={setEditEpicOpen}>
-        <DialogContent className="sm:max-w-lg mx-4 max-h-[min(90vh,720px)] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Редактировать эпик</DialogTitle>
-            <DialogDescription className="sr-only">Редактирование полей эпика: название, ссылки и даты.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="space-y-3">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Основное</p>
-              <div>
-                <label className="text-[11px] text-muted-foreground font-medium" htmlFor="epic-edit-title">Название</label>
-                <input
-                  id="epic-edit-title"
-                  value={editTitle}
-                  onChange={(e) => setEditTitle(e.target.value)}
-                  className="mt-1 w-full px-3 py-2 text-sm bg-background border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50"
-                />
-              </div>
-              <div>
-                <label className="text-[11px] text-muted-foreground font-medium" htmlFor="epic-edit-notes">Описание / заметки</label>
-                <textarea
-                  id="epic-edit-notes"
-                  value={editNotes}
-                  onChange={(e) => setEditNotes(e.target.value)}
-                  rows={4}
-                  className="mt-1 w-full px-3 py-2 text-sm bg-background border border-input rounded-lg resize-y focus:outline-none focus:ring-1 focus:ring-primary/50"
-                />
-              </div>
-              {canEditEpicLinks && (
-                <div>
-                  <label className="text-[11px] text-muted-foreground font-medium block mb-1">Статус эпика</label>
-                  <p className="text-[11px] text-muted-foreground mb-2">
-                    Общий жизненный цикл эпика: новый, в работе или выпущен. QA-статус меняется отдельно на странице эпика.
-                  </p>
-                  <Select value={editStatus} onValueChange={(v) => setEditStatus(v as EpicStatus)}>
-                    <SelectTrigger className="text-sm" data-testid="select-edit-epic-status">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="new">Новый</SelectItem>
-                      <SelectItem value="in-progress">В работе</SelectItem>
-                      <SelectItem value="released">Выпущен</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-3 border-t border-border pt-3">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Ссылки</p>
-              {canEditEpicLinks
-                ? (
-                  <>
-                    <div className="grid grid-cols-1 gap-3">
-                      <div>
-                        <label className="text-[11px] text-muted-foreground font-medium" htmlFor="epic-edit-jira">Jira</label>
-                        <input
-                          id="epic-edit-jira"
-                          value={editJiraUrl}
-                          onChange={(e) => setEditJiraUrl(e.target.value)}
-                          placeholder="https://…"
-                          className="mt-1 w-full px-3 py-2 text-sm bg-background border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground font-medium" htmlFor="epic-edit-jql">Jira JQL</label>
-                        <textarea id="epic-edit-jql" value={editJiraJql} onChange={(e) => setEditJiraJql(e.target.value)} placeholder="project = MAG AND parent = MAG-123" className="mt-1 min-h-20 w-full px-3 py-2 text-sm bg-background border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50" />
-                      </div>
-                      <div>
-                        <label className="text-[11px] text-muted-foreground font-medium" htmlFor="epic-edit-conf">Confluence</label>
-                        <input
-                          id="epic-edit-conf"
-                          value={editConfluenceUrl}
-                          onChange={(e) => setEditConfluenceUrl(e.target.value)}
-                          className="mt-1 w-full px-3 py-2 text-sm bg-background border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50"
-                        />
-                      </div>
-                      {!hideKanbanUi && (
-                      <div>
-                        <label className="text-[11px] text-muted-foreground font-medium" htmlFor="epic-edit-kanban">Kanban</label>
-                        <input
-                          id="epic-edit-kanban"
-                          value={editKanbanUrl}
-                          onChange={(e) => setEditKanbanUrl(e.target.value)}
-                          className="mt-1 w-full px-3 py-2 text-sm bg-background border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50"
-                        />
-                      </div>
-                      )}
-                      <div>
-                        <label className="text-[11px] text-muted-foreground font-medium" htmlFor="epic-edit-design">Дизайн (Figma и т.п.)</label>
-                        <input
-                          id="epic-edit-design"
-                          value={editDesignUrl}
-                          onChange={(e) => setEditDesignUrl(e.target.value)}
-                          className="mt-1 w-full px-3 py-2 text-sm bg-background border border-input rounded-lg focus:outline-none focus:ring-1 focus:ring-primary/50"
-                        />
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div>
-                          <label className="text-[11px] text-muted-foreground font-medium" htmlFor="epic-edit-start">Старт</label>
-                          <div className="mt-1">
-                            <DatePickerButton value={editStartDate} onChange={setEditStartDate} testId="input-edit-epic-start-date" />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="text-[11px] text-muted-foreground font-medium" htmlFor="epic-edit-target">Целевая дата</label>
-                          <div className="mt-1">
-                            <DatePickerButton value={editTargetDate} onChange={setEditTargetDate} testId="input-edit-epic-target-date" />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                )
-                : (
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Ссылки может менять администратор или менеджер с доступом к этому проекту. Сейчас они заданы в карточке эпика ниже.
-                  </p>
-                )}
-            </div>
-
-            <div className="space-y-3 border-t border-border pt-3">
-              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Ответственные</p>
-              {canEditEpicLinks
-                ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <div>
-                      <label className="text-[11px] text-muted-foreground font-medium block mb-1">Лид аналитики</label>
-                      <Select value={editLeadAnalystId} onValueChange={setEditLeadAnalystId}>
-                        <SelectTrigger className="text-xs h-9">
-                          <SelectValue placeholder="—" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">—</SelectItem>
-                          {users.map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              {u.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <label className="text-[11px] text-muted-foreground font-medium block mb-1">Лид дизайна</label>
-                      <Select value={editLeadDesignerId} onValueChange={setEditLeadDesignerId}>
-                        <SelectTrigger className="text-xs h-9">
-                          <SelectValue placeholder="—" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">—</SelectItem>
-                          {users.map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              {u.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-                )
-                : (
-                  <p className="text-xs text-muted-foreground leading-relaxed">
-                    Ответственных может менять администратор или менеджер проекта. Текущие лица отображаются в боковой панели страницы.
-                  </p>
-                )}
-            </div>
-          </div>
-          <DialogFooter className="flex-col-reverse gap-2 sm:flex-row sm:justify-between sm:gap-0">
-            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-              {me?.role === "admin" && numericId && apiEpic && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEditEpicOpen(false);
-                    setDeleteEpicOpen(true);
-                  }}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-destructive hover:bg-destructive/10 rounded-md"
-                  data-testid="button-delete-epic"
-                >
-                  <Trash2 size={14} />
-                  Удалить эпик
-                </button>
-              )}
-            </div>
-            <div className="flex w-full justify-end gap-2 sm:w-auto">
-              <button
-                type="button"
-                onClick={() => setEditEpicOpen(false)}
-                className="px-3 py-2 text-xs font-medium rounded-md border border-border hover:bg-muted/50"
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                onClick={() => void saveEpicDetails()}
-                disabled={updateEpic.isPending}
-                className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-medium rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
-              >
-                {updateEpic.isPending ? <Loader2 size={12} className="animate-spin" /> : null}
-                Сохранить
-              </button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={releaseDialogOpen} onOpenChange={setReleaseDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Добавить в релиз</DialogTitle>
-            <DialogDescription>Выберите активный релиз проекта или создайте новый.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Существующий релиз</p>
-              <Select value={selectedReleaseId?.toString() ?? ""} onValueChange={(value) => setSelectedReleaseId(Number(value))}>
-                <SelectTrigger><SelectValue placeholder="Выберите релиз" /></SelectTrigger>
-                <SelectContent>
-                  {(releasesQuery.data?.items ?? []).filter((release) => ["draft", "in_progress", "ready"].includes(release.status)).map((release) => (
-                    <SelectItem key={release.id} value={String(release.id)}>{release.key} · {release.title}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <button type="button" disabled={!selectedReleaseId || !numericId || addToRelease.isPending} onClick={async () => {
-                if (!numericId) return;
-                try { await addToRelease.mutateAsync({ epic_ids: [numericId] }); toast.success("Эпик добавлен в релиз"); setReleaseDialogOpen(false); await epicQuery.refetch(); } catch (error) { toast.error(error instanceof Error ? error.message : "Не удалось добавить эпик"); }
-              }} className="w-full rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground disabled:opacity-50">Добавить</button>
-            </div>
-            <div className="border-t border-border pt-4 space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">Создать новый релиз</p>
-              <Input value={newReleaseTitle} onChange={(event) => setNewReleaseTitle(event.target.value)} placeholder="Название нового релиза" />
-              <button type="button" disabled={!newReleaseTitle.trim() || !numericId || !apiEpic || createRelease.isPending} onClick={async () => {
-                if (!numericId || !apiEpic) return;
-                try { const release = await createRelease.mutateAsync({ project_id: apiEpic.project_id, title: newReleaseTitle.trim(), epic_ids: [numericId] }); toast.success(`Релиз ${release.key} создан`); setReleaseDialogOpen(false); setLocation(`/releases/${release.id}`); } catch (error) { toast.error(error instanceof Error ? error.message : "Не удалось создать релиз"); }
-              }} className="w-full rounded-md border border-border px-3 py-2 text-xs font-medium hover:bg-muted disabled:opacity-50">Создать новый релиз</button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CreateEpicDialog open={editEpicOpen} onOpenChange={setEditEpicOpen} epic={apiEpic} />
 
       <AlertDialog open={deleteEpicOpen} onOpenChange={setDeleteEpicOpen}>
         <AlertDialogContent>

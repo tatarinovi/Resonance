@@ -8,7 +8,7 @@ import { ListPagination } from "@/components/shared/ListPagination";
 import { KANBAN_FAVORITE_EPICS_STORAGE_KEY, useKanbanFavoriteItems } from "@/hooks/useKanbanFavoriteItems";
 import { Link } from "@/lib/router";
 import { ApiError } from "@/lib/api";
-import { useKanbanAnalyticsBootstrap, useKanbanAnalyticsEpics, useKanbanAnalyticsRefresh } from "@/lib/queries";
+import { useKanbanAnalyticsBootstrap, useKanbanAnalyticsEpics, useRefreshScopedKanbanEpics } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 function formatResonanceTestStage(raw: string | null | undefined): string | null {
@@ -59,8 +59,7 @@ function formatDeviationPercent(value: number): string {
 
 export default function KanbanAnalyticsEpicsPage() {
   const bootstrap = useKanbanAnalyticsBootstrap(true, true);
-  const refresh = useKanbanAnalyticsRefresh();
-  const refreshRunning = isKanbanSnapshotRefreshing(bootstrap.data?.refresh_state, refresh.isPending);
+  const refresh = useRefreshScopedKanbanEpics();
   const {
     orderItems: orderFavoriteEpics,
     isFavorite: isFavoriteEpic,
@@ -77,9 +76,11 @@ export default function KanbanAnalyticsEpicsPage() {
     return slugs.length ? slugs.join(",") : undefined;
   }, [selectedProjects]);
 
-  const epics = useKanbanAnalyticsEpics({ project_slugs, search: search.trim() || undefined, page, page_size: pageSize }, bootstrap.data?.snapshot_ready ?? false);
+  const scopeParams = { project_slugs, search: search.trim() || undefined, page, page_size: pageSize };
+  const epics = useKanbanAnalyticsEpics(scopeParams, !bootstrap.isLoading && !bootstrap.isError);
+  const refreshRunning = refresh.isPending || epics.data?.snapshot.status === "refreshing";
 
-  const projects = bootstrap.data?.projects ?? [];
+  const projects = epics.data?.available_projects?.length ? epics.data.available_projects : (bootstrap.data?.projects ?? []);
   const epicItems = useMemo(() => {
     const items = epics.data?.items ?? [];
     return orderFavoriteEpics(items, (e) => `${e.project.slug}:${e.id}`);
@@ -97,8 +98,8 @@ export default function KanbanAnalyticsEpicsPage() {
 
   const doRefresh = async () => {
     try {
-      const res = await refresh.mutateAsync();
-      toast.success(`Снимок обновлён: ${res.epics} эпиков, ${res.tasks} задач`);
+      await refresh.mutateAsync(scopeParams);
+      toast.success("Обновление текущего среза запущено");
     } catch (e) {
       toast.error(e instanceof ApiError ? e.message : "Не удалось обновить снимок");
     }
@@ -141,10 +142,10 @@ export default function KanbanAnalyticsEpicsPage() {
     );
   }
 
-  if (!bootstrap.data?.snapshot_ready) {
+  if (!epics.isLoading && epics.data?.snapshot.status === "empty") {
     return (
       <div className={EPICS_PAGE_SHELL}>
-        <KanbanSnapshotRefreshBanner refreshState={bootstrap.data?.refresh_state} localPending={refresh.isPending} />
+        <KanbanSnapshotRefreshBanner refreshState={undefined} localPending={refreshRunning} />
         <EmptyState
           icon={BarChart2}
           title="Снимок Kanban ещё не создан"
@@ -172,7 +173,7 @@ export default function KanbanAnalyticsEpicsPage() {
         <div>
           <h1 className="text-lg font-semibold">Kanban · Эпики</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Снимок: {formatKanbanSnapshotTime(bootstrap.data.snapshot_updated_at)}
+            Срез: {formatKanbanSnapshotTime(epics.data?.snapshot.last_success_at)} · {epics.data?.snapshot.status === "fresh" ? "актуален" : epics.data?.snapshot.status === "failed" ? "ошибка обновления" : epics.data?.snapshot.status === "stale" ? "устарел" : "обновляется"}
           </p>
         </div>
         <button
@@ -187,7 +188,7 @@ export default function KanbanAnalyticsEpicsPage() {
         </button>
       </div>
 
-      <KanbanSnapshotRefreshBanner refreshState={bootstrap.data.refresh_state} localPending={refresh.isPending} />
+      <KanbanSnapshotRefreshBanner refreshState={undefined} localPending={refreshRunning} />
 
       <div className="flex flex-col gap-3 mb-4">
         <div className="relative">

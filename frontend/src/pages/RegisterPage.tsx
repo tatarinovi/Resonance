@@ -67,7 +67,7 @@ export default function RegisterPage() {
 
   if (submitted) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center px-4">
+      <div className="min-h-dvh bg-background flex items-center justify-center px-4">
         <div className="max-w-sm w-full bg-card border border-border rounded-xl p-6 text-center shadow-lg">
           <img src="/sidebar-logo.png" alt="Resonance" className="w-12 h-12 mx-auto rounded-2xl mb-4 object-cover" />
           <h2 className="text-base font-semibold text-foreground">Заявка отправлена</h2>
@@ -87,12 +87,12 @@ export default function RegisterPage() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex items-center justify-center px-4 py-10">
+    <div className="min-h-dvh bg-background flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center mb-8">
           <img src="/sidebar-logo.png" alt="Resonance" className="w-12 h-12 rounded-2xl mb-4 object-cover" />
           <h1 className="text-xl font-semibold text-foreground">Запрос доступа</h1>
-          <p className="text-sm text-muted-foreground mt-1">
+          <p className="text-sm text-muted-foreground mt-1 text-center">
             После заполнения формы дождитесь подтверждения администратора
           </p>
         </div>
@@ -196,9 +196,9 @@ export default function RegisterPage() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div>
-      <label className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</label>
+    <label className="block">
+      <span className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</span>
       {children}
-    </div>
+    </label>
   );
 }

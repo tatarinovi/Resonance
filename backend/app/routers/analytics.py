@@ -1,23 +1,26 @@
 from __future__ import annotations
 
 import logging
+import hashlib
+import json
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
 from ..access_policy import AccessPolicy
 from ..config import get_settings
-from ..database import get_db
+from ..database import SessionLocal, get_db
 from ..datetime_util import utc_iso_z
 from ..deps import require_admin
 from ..integration_service import optional_global_kanban_token, require_global_kanban_token
 from ..kanban_client import KanbanClient, normalize_person, normalize_stage, normalize_task, parse_kanban_reference
 from ..kanban_member_roles import ROLE_ORDER, effective_role, load_project_role_map
-from ..models import AppSetting, Epic, KanbanEpicComment, User, UserRole
+from ..models import AppSetting, Epic, KanbanEpicComment, ScopedAnalyticsSnapshot, User, UserRole
 
 
 logger = logging.getLogger(__name__)
@@ -26,6 +29,7 @@ settings = get_settings()
 SNAPSHOT_KEY = "kanban_analytics_snapshot"
 SNAPSHOT_REFRESH_STATE_KEY = "kanban_analytics_snapshot_refresh_state"
 SNAPSHOT_REFRESH_RUNNING_TTL = timedelta(minutes=30)
+SCOPED_SNAPSHOT_FRESH_TTL = timedelta(minutes=10)
 """Оценка QA для Kanban-эпиков без карточки Resonance: ключ `project_slug:kanban_epic_id` → часы (float)."""
 KANBAN_SHADOW_QA_ESTIMATES_KEY = "kanban_epic_qa_estimates_shadow"
 
@@ -36,6 +40,33 @@ def _kanban_client(db: Session) -> KanbanClient:
 
 def _snapshot_item_key(project_slug: str, epic_id: int) -> str:
     return f"{project_slug}:{epic_id}"
+
+
+def _scope_hash(scope: dict[str, Any]) -> str:
+    encoded = json.dumps(scope, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def _scoped_status(row: ScopedAnalyticsSnapshot, now: datetime | None = None) -> str:
+    now = now or datetime.utcnow()
+    if row.refresh_started_at is not None:
+        return "refreshing"
+    if row.last_attempt_failed:
+        return "failed" if row.last_success_at is not None else "error"
+    if row.last_success_at is None:
+        return "empty"
+    return "fresh" if now - row.last_success_at < SCOPED_SNAPSHOT_FRESH_TTL else "stale"
+
+
+def _scoped_envelope(row: ScopedAnalyticsSnapshot) -> dict[str, Any]:
+    return {
+        "scope": row.scope_json,
+        "status": _scoped_status(row),
+        "last_success_at": row.last_success_at,
+        "refresh_started_at": row.refresh_started_at,
+        "last_attempt_failed": row.last_attempt_failed,
+        "error": row.error_message,
+    }
 
 
 def _load_snapshot(db: Session) -> dict[str, Any] | None:
@@ -1031,6 +1062,163 @@ def _kanban_daily_summary_from_snapshot(
             "total_hours": round(total_minutes / 60, 2),
         },
     }
+
+
+def _build_scoped_epics(db: Session, user: User, scope: dict[str, Any]) -> dict[str, Any]:
+    client = _kanban_client(db)
+    stages = client.stages()
+    all_projects = client.projects()
+    projects = all_projects
+    selected = set(scope.get("project_slugs") or [])
+    if selected:
+        projects = [project for project in projects if project.get("slug") in selected]
+    stages_map = {int(item.get("id")): item for item in stages if item.get("id") is not None}
+    stage_ids = scope.get("status_ids") or [sid for sid in stages_map if sid > 0]
+    search = str(scope.get("search") or "").casefold()
+    page = int(scope["page"])
+    page_size = int(scope["page_size"])
+    local_lookup = _load_local_epic_lookup(db, user)
+    items: list[dict[str, Any]] = []
+    has_more = False
+
+    for project_index, project in enumerate(projects):
+        slug = project.get("slug")
+        if not slug:
+            continue
+        project_users = client.project_users(slug)
+        params = [
+            ("filter[type_id][5]", "5"),
+            *[(f"filter[stage_id][{stage_id}]", str(stage_id)) for stage_id in stage_ids],
+            ("count", str(page_size + 1)),
+            ("page", str(page)),
+        ]
+        raw_epics = client.project_list(slug, params=params)
+        if len(raw_epics) > page_size:
+            has_more = True
+        for raw in raw_epics[:page_size]:
+            normalized = normalize_task(raw, project, stages_map, project_users, client.web_base_url)
+            if search and search not in str(normalized.get("name") or "").casefold():
+                continue
+            epic_id = int(normalized.get("id") or 0)
+            epic_payload = client.task(epic_id)
+            embedded = epic_payload.get("epic_by")
+            task_payloads = embedded if isinstance(embedded, list) else client.project_list_all(
+                slug, params=[(f"filter[epic_id][{epic_id}]", str(epic_id))]
+            )
+            detail = _epic_detail_aggregate(
+                client, db, slug, project, epic_id, epic_payload, task_payloads,
+                stages_map, project_users,
+            )
+            summary = detail.get("summary") or {}
+            role_hours = summary.get("hours_by_role") or {}
+            local_meta = _local_meta_for_kanban_epic(
+                db, user, slug, epic_id,
+                local_lookup.get(_snapshot_item_key(slug, epic_id), {}),
+                qa_fact_hours=float(role_hours.get("QA")) if role_hours.get("QA") is not None else None,
+                tracked_hours=summary.get("tracked_hours"),
+            )
+            items.append({
+                **normalized,
+                "local_meta": local_meta,
+                "task_summary": {
+                    "total": int(summary.get("task_count") or 0),
+                    "in_progress": int(summary.get("in_progress_count") or 0),
+                    "completed": int(summary.get("done_count") or 0),
+                },
+            })
+        if len(items) >= page_size:
+            has_more = has_more or project_index < len(projects) - 1
+            break
+    items.sort(key=lambda item: (item.get("deadline") or "9999", item["project"]["name"], item["name"]))
+    items = items[:page_size]
+    total = (page - 1) * page_size + len(items) + (1 if has_more else 0)
+    return {
+        "items": items, "total": total, "page": page, "page_size": page_size,
+        "available_projects": [{"id": item.get("id"), "slug": item.get("slug"), "name": item.get("name")} for item in all_projects],
+        "summary": {
+            "total": total,
+            "projects": len({item["project"]["slug"] for item in items}),
+            "over_estimate": sum(1 for item in items if item["local_meta"].get("qa_estimate_hours") and item["local_meta"].get("qa_fact_hours") is not None and float(item["local_meta"]["qa_fact_hours"]) > float(item["local_meta"]["qa_estimate_hours"])),
+        },
+    }
+
+
+def _refresh_scoped_epics(scope_hash: str, user_id: int) -> None:
+    with SessionLocal() as db:
+        row = db.get(ScopedAnalyticsSnapshot, scope_hash)
+        user = db.get(User, user_id)
+        if row is None or user is None:
+            return
+        try:
+            data = _build_scoped_epics(db, user, dict(row.scope_json))
+            now = datetime.utcnow()
+            row.data_json = data
+            row.last_success_at = now
+            row.last_attempt_at = now
+            row.last_attempt_failed = False
+            row.error_message = None
+            row.refresh_started_at = None
+            db.commit()
+        except Exception as exc:
+            logger.exception("Scoped Kanban epic refresh failed for %s", scope_hash)
+            row = db.get(ScopedAnalyticsSnapshot, scope_hash)
+            if row:
+                row.last_attempt_at = datetime.utcnow()
+                row.last_attempt_failed = True
+                row.error_message = "Не удалось обновить данные Kanban. Повторите попытку позже."
+                row.refresh_started_at = None
+                db.commit()
+
+
+@router.get("/kanban/scopes/epics")
+def scoped_kanban_epics(
+    background_tasks: BackgroundTasks,
+    project_slugs: str | None = Query(default=None),
+    status_ids: str | None = Query(default=None),
+    search: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+    force_refresh: bool = Query(default=False),
+    user: User = Depends(require_admin),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    scope = {
+        "type": "kanban_epics", "access_user_id": user.id,
+        "project_slugs": sorted(_selected_project_slugs(project_slugs)),
+        "status_ids": sorted(_selected_stage_ids(status_ids, [])),
+        "search": (search or "").strip(), "page": page, "page_size": page_size,
+    }
+    key = _scope_hash(scope)
+    row = db.scalar(select(ScopedAnalyticsSnapshot).where(ScopedAnalyticsSnapshot.scope_hash == key).with_for_update())
+    if row is None:
+        row = ScopedAnalyticsSnapshot(scope_hash=key, scope_type="kanban_epics", scope_json=scope)
+        db.add(row)
+        try:
+            db.flush()
+        except IntegrityError:
+            db.rollback()
+            row = db.scalar(select(ScopedAnalyticsSnapshot).where(ScopedAnalyticsSnapshot.scope_hash == key).with_for_update())
+            if row is None:
+                raise
+    now = datetime.utcnow()
+    due = row.last_success_at is None or now - row.last_success_at >= SCOPED_SNAPSHOT_FRESH_TTL
+    running = row.refresh_started_at is not None and now - row.refresh_started_at < SNAPSHOT_REFRESH_RUNNING_TTL
+    if row.refresh_started_at is not None and not running:
+        row.refresh_started_at = None
+        row.last_attempt_failed = True
+        row.error_message = "Предыдущее обновление не завершилось."
+    if (force_refresh or due) and not running:
+        row.refresh_started_at = now
+        row.last_attempt_at = now
+        row.last_attempt_failed = False
+        row.error_message = None
+        db.commit()
+        background_tasks.add_task(_refresh_scoped_epics, key, user.id)
+    else:
+        db.commit()
+    db.refresh(row)
+    data = row.data_json or {"items": [], "total": 0, "page": page, "page_size": page_size, "available_projects": [], "summary": {"total": 0, "projects": 0, "over_estimate": 0}}
+    return {**data, "snapshot": _scoped_envelope(row)}
 
 
 @router.get("/kanban/bootstrap")

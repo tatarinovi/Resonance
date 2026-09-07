@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, wait
 from datetime import datetime
+import hashlib
+import json
 import re
 import threading
 import time
@@ -18,7 +20,8 @@ from ..database import SessionLocal, get_db
 from ..deps import get_current_user
 from ..epic_jira_service import fetch_jira_issues, mark_jira_refresh_failure, replace_jira_issues
 from ..epic_testops_service import fetch_testops_run, mark_testops_refresh_failure, parse_testops_launch_id, replace_testops_snapshot
-from ..kanban_client import parse_kanban_reference
+from ..integration_service import require_global_kanban_token
+from ..kanban_client import KanbanClient, parse_kanban_reference
 from ..models import (
     AppSetting,
     Epic,
@@ -29,9 +32,11 @@ from ..models import (
     EpicTestRun,
     Project,
     Release,
+    ReleaseSequenceCounter,
     ReleaseAuditLog,
     ReleaseEpicMembership,
     ReleaseStatus,
+    ScopedAnalyticsSnapshot,
     Ticket,
     TicketStatus,
     User,
@@ -209,7 +214,16 @@ def create_release(
     if not AccessPolicy.can_manage_release(user, probe):
         raise HTTPException(status_code=403, detail="Only coordinators and admins can create releases")
     _validate_owner(db, project.id, payload.owner_user_id)
-    sequence = int(db.scalar(select(func.max(Release.sequence_number)).where(Release.project_id == project.id)) or 0) + 1
+    counter = db.scalar(select(ReleaseSequenceCounter).where(ReleaseSequenceCounter.id == 1).with_for_update())
+    if counter is None:
+        counter = ReleaseSequenceCounter(
+            id=1,
+            next_value=int(db.scalar(select(func.max(Release.sequence_number))) or 0) + 1,
+        )
+        db.add(counter)
+        db.flush()
+    sequence = counter.next_value
+    counter.next_value += 1
     release = Release(
         project_id=project.id,
         sequence_number=sequence,
@@ -690,6 +704,56 @@ def _refresh_operation(epic_id: int, source: str, deadline: float) -> dict:
             return {"epic_id": epic_id, "source": source, "status": "failed", "error_code": code, "message": message}
 
 
+def _refresh_release_kanban_scope(db: Session, release: Release) -> dict[str, Any]:
+    refs: list[tuple[int, str, int]] = []
+    for epic in current_epics(release):
+        if not epic.kanban_url:
+            continue
+        try:
+            slug, task_id = parse_kanban_reference(epic.kanban_url)
+        except ValueError:
+            continue
+        refs.append((epic.id, slug, task_id))
+    if not refs:
+        return {"status": "skipped", "message": "У эпиков релиза нет ссылок Kanban"}
+    scope = {"type": "release_overview", "release_id": release.id, "epic_ids": sorted(epic_id for epic_id, _, _ in refs)}
+    key = hashlib.sha256(json.dumps(scope, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+    row = db.get(ScopedAnalyticsSnapshot, key)
+    if row is None:
+        row = ScopedAnalyticsSnapshot(scope_hash=key, scope_type="release_overview", scope_json=scope)
+        db.add(row)
+        db.flush()
+    now = datetime.utcnow()
+    row.refresh_started_at = now
+    row.last_attempt_at = now
+    db.commit()
+    try:
+        client = KanbanClient(token=require_global_kanban_token(db))
+        items = []
+        for epic_id, slug, task_id in refs:
+            epic_payload = client.task(task_id)
+            embedded = epic_payload.get("epic_by") if isinstance(epic_payload, dict) else None
+            tasks = embedded if isinstance(embedded, list) else client.project_list_all(slug, [(f"filter[epic_id][{task_id}]", str(task_id))])
+            items.append({"epic_id": epic_id, "project_slug": slug, "kanban_epic_id": task_id, "epic": epic_payload, "tasks": tasks})
+        now = datetime.utcnow()
+        row.data_json = {"items": items}
+        row.last_success_at = now
+        row.last_attempt_at = now
+        row.last_attempt_failed = False
+        row.error_message = None
+        row.refresh_started_at = None
+        db.commit()
+        return {"status": "success", "count": len(items), "last_success_at": now}
+    except Exception:
+        row = db.get(ScopedAnalyticsSnapshot, key)
+        row.last_attempt_at = datetime.utcnow()
+        row.last_attempt_failed = True
+        row.error_message = "Не удалось обновить данные Kanban."
+        row.refresh_started_at = None
+        db.commit()
+        return {"status": "failed", "message": row.error_message, "last_success_at": row.last_success_at}
+
+
 @router.post("/{release_id}/refresh")
 def refresh_release(release_id: int, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     release = _release_or_404(db, release_id, user)
@@ -712,7 +776,8 @@ def refresh_release(release_id: int, user: User = Depends(get_current_user), db:
             epic_id, source = futures[future]
             future.cancel()
             results.append({"epic_id": epic_id, "source": source, "status": "timed_out", "error_code": "wall_clock_timeout", "message": "Release refresh wall-clock budget exceeded"})
-        statuses = [item["status"] for item in results]
+        kanban_result = _refresh_release_kanban_scope(db, release)
+        statuses = [item["status"] for item in results] + (["refreshed"] if kanban_result["status"] in {"success", "skipped"} else ["failed"])
         outcome = "success" if statuses and all(value in {"refreshed", "skipped"} for value in statuses) else ("partial" if any(value == "refreshed" for value in statuses) else "failed")
         fresh_release = db.scalar(release_query().where(Release.id == release_id))
         counts = {value: statuses.count(value) for value in set(statuses)}
@@ -725,7 +790,14 @@ def refresh_release(release_id: int, user: User = Depends(get_current_user), db:
             "started_at": started_at,
             "finished_at": datetime.utcnow(),
             "results": sorted(results, key=lambda item: (item["epic_id"], item["source"])),
-            "kanban": {"status": "not_refreshed", **kanban_freshness(db)},
+            "sources": {
+                source: {
+                    "status": "success" if any(item["source"] == source and item["status"] == "refreshed" for item in results) and not any(item["source"] == source and item["status"] in {"failed", "timed_out"} for item in results) else ("partial" if any(item["source"] == source and item["status"] == "refreshed" for item in results) else "failed"),
+                    "results": [item for item in results if item["source"] == source],
+                }
+                for source in ("jira", "testops")
+            },
+            "kanban": kanban_result,
             "lock_scope": "process_local_single_backend_process_only",
         }
     finally:

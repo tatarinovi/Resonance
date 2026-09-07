@@ -20,7 +20,7 @@ function clearUserDataOnLogout(): void {
   const keysToRemove: string[] = [];
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
-    if (key && !LOCAL_STORAGE_KEEP.has(key)) {
+    if (key && (key.startsWith("resonance.") || key.startsWith("resonance:")) && !LOCAL_STORAGE_KEEP.has(key)) {
       keysToRemove.push(key);
     }
   }
@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState<boolean>(Boolean(tokenStorage.get()));
   const [error, setError] = useState<string | null>(null);
 
-  const fetchMe = useCallback(async () => {
+  const fetchMe = useCallback(async (propagateError = false) => {
     if (!tokenStorage.get()) {
       setMe(null);
       setIsLoading(false);
@@ -97,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       tokenStorage.clear();
       const message = err instanceof Error ? err.message : "Не удалось получить профиль";
       setError(message);
+      if (propagateError) throw err;
     } finally {
       setIsLoading(false);
     }
@@ -116,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           password,
         });
         tokenStorage.set(access_token);
-        await fetchMe();
+        await fetchMe(true);
       } catch (err) {
         setIsLoading(false);
         const message = err instanceof Error ? err.message : "Не удалось войти";
@@ -135,7 +136,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
-    await fetchMe();
+    await fetchMe(true);
   }, [fetchMe]);
 
   const currentUser = useMemo<RefUser>(

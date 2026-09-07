@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
@@ -9,36 +10,37 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { DataBridge } from "@/contexts/DataBridge";
 import { ThemePreferenceProvider } from "@/contexts/ThemeContext";
 
-import ActivityPage from "@/pages/ActivityPage";
-import DashboardPage from "@/pages/DashboardPage";
-import EpicDetailPage from "@/pages/EpicDetailPage";
-import EpicsPage from "@/pages/EpicsPage";
-import ReleasesPage from "@/pages/ReleasesPage";
-import ReleaseDetailPage from "@/pages/ReleaseDetailPage";
-import AdminFeedbackPage from "@/pages/AdminFeedbackPage";
-import FeedbackPage from "@/pages/FeedbackPage";
-import InboxPage from "@/pages/InboxPage";
 import LoginPage from "@/pages/LoginPage";
 import NotFound from "@/pages/not-found";
-import ProfilePage from "@/pages/ProfilePage";
-import ProjectDetailPage from "@/pages/ProjectDetailPage";
-import ProjectsPage from "@/pages/ProjectsPage";
-import QuestionDetailPage from "@/pages/QuestionDetailPage";
-import QuestionsPage from "@/pages/QuestionsPage";
 import RegisterPage from "@/pages/RegisterPage";
-import SettingsPage from "@/pages/SettingsPage";
-import StatisticsPage from "@/pages/StatisticsPage";
-import UsersPage from "@/pages/UsersPage";
-import UserProfilePage from "@/pages/UserProfilePage";
-import KanbanProjectBoardPage from "@/pages/KanbanProjectBoardPage";
-import KanbanProjectMemberRolesPage from "@/pages/KanbanProjectMemberRolesPage";
-import KanbanProjectsPage from "@/pages/KanbanProjectsPage";
-import KanbanTeamRolesHubPage from "@/pages/KanbanTeamRolesHubPage";
-import KanbanAnalyticsEpicsPage from "@/pages/KanbanAnalyticsEpicsPage";
-import KanbanAnalyticsEpicDetailPage from "@/pages/KanbanAnalyticsEpicDetailPage";
-import KanbanAnalyticsTasksPage from "@/pages/KanbanAnalyticsTasksPage";
-import KanbanAnalyticsWorkloadPage from "@/pages/KanbanAnalyticsWorkloadPage";
-import KanbanSummaryPage from "@/pages/KanbanSummaryPage";
+
+const ActivityPage = lazy(() => import("@/pages/ActivityPage"));
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const EpicDetailPage = lazy(() => import("@/pages/EpicDetailPage"));
+const EpicsPage = lazy(() => import("@/pages/EpicsPage"));
+const ReleasesPage = lazy(() => import("@/pages/ReleasesPage"));
+const ReleaseDetailPage = lazy(() => import("@/pages/ReleaseDetailPage"));
+const AdminFeedbackPage = lazy(() => import("@/pages/AdminFeedbackPage"));
+const FeedbackPage = lazy(() => import("@/pages/FeedbackPage"));
+const InboxPage = lazy(() => import("@/pages/InboxPage"));
+const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
+const ProjectDetailPage = lazy(() => import("@/pages/ProjectDetailPage"));
+const ProjectsPage = lazy(() => import("@/pages/ProjectsPage"));
+const QuestionDetailPage = lazy(() => import("@/pages/QuestionDetailPage"));
+const QuestionsPage = lazy(() => import("@/pages/QuestionsPage"));
+const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
+const StatisticsPage = lazy(() => import("@/pages/StatisticsPage"));
+const UsersPage = lazy(() => import("@/pages/UsersPage"));
+const UserProfilePage = lazy(() => import("@/pages/UserProfilePage"));
+const KanbanProjectBoardPage = lazy(() => import("@/pages/KanbanProjectBoardPage"));
+const KanbanProjectMemberRolesPage = lazy(() => import("@/pages/KanbanProjectMemberRolesPage"));
+const KanbanProjectsPage = lazy(() => import("@/pages/KanbanProjectsPage"));
+const KanbanTeamRolesHubPage = lazy(() => import("@/pages/KanbanTeamRolesHubPage"));
+const KanbanAnalyticsEpicsPage = lazy(() => import("@/pages/KanbanAnalyticsEpicsPage"));
+const KanbanAnalyticsEpicDetailPage = lazy(() => import("@/pages/KanbanAnalyticsEpicDetailPage"));
+const KanbanAnalyticsTasksPage = lazy(() => import("@/pages/KanbanAnalyticsTasksPage"));
+const KanbanAnalyticsWorkloadPage = lazy(() => import("@/pages/KanbanAnalyticsWorkloadPage"));
+const KanbanSummaryPage = lazy(() => import("@/pages/KanbanSummaryPage"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -53,7 +55,11 @@ function ShellRoute({ children }: { children: React.ReactNode }) {
   return (
     <AdminDashboardPersonaProvider>
       <DataBridge>
-        <ShellLayoutGate>{children}</ShellLayoutGate>
+        <ShellLayoutGate>
+          <Suspense fallback={<div role="status" className="p-6 text-sm text-muted-foreground">Загрузка страницы…</div>}>
+            {children}
+          </Suspense>
+        </ShellLayoutGate>
       </DataBridge>
     </AdminDashboardPersonaProvider>
   );

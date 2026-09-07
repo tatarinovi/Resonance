@@ -49,6 +49,9 @@ export function messageFromApiPayload(payload: unknown, fallback: string): strin
   if (payload && typeof payload === "object" && "detail" in payload) {
     const d = (payload as { detail: unknown }).detail;
     if (typeof d === "string") return d;
+    if (d && typeof d === "object" && "message" in d && typeof d.message === "string" && d.message.trim()) {
+      return d.message;
+    }
     if (Array.isArray(d) && d.length > 0) {
       const item = d[0];
       if (item && typeof item === "object" && "msg" in item) {

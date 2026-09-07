@@ -28,6 +28,7 @@ import type {
   ApiProject,
   ApiReferenceData,
   ApiRelease,
+  ApiReleaseAssessment,
   ApiReleaseOverview,
   ApiReleasePage,
   ApiRoleSummary,
@@ -246,6 +247,14 @@ export function useKanbanAnalyticsRefresh() {
 }
 
 export type KanbanAnalyticsListSummary = { total: number; projects: number; mine?: boolean; over_estimate?: number };
+export type ScopedSnapshotState = {
+  scope: Record<string, unknown>;
+  status: "refreshing" | "failed" | "fresh" | "stale" | "empty" | "error";
+  last_success_at: string | null;
+  refresh_started_at: string | null;
+  last_attempt_failed: boolean;
+  error: string | null;
+};
 
 export type KanbanAnalyticsEpicListItem = {
   id: number;
@@ -275,10 +284,20 @@ export type KanbanAnalyticsEpicListItem = {
 export function useKanbanAnalyticsEpics(params: { project_slugs?: string; status_ids?: string; search?: string; page?: number; page_size?: number }, enabled = true) {
   return useQuery({
     queryKey: ["kanban-analytics", "epics", params] as const,
-    queryFn: () => api.get<ApiPage<KanbanAnalyticsEpicListItem> & { summary: KanbanAnalyticsListSummary }>("/analytics/kanban/epics", { query: params }),
+    queryFn: () => api.get<ApiPage<KanbanAnalyticsEpicListItem> & { summary: KanbanAnalyticsListSummary; available_projects: KanbanAnalyticsBootstrap["projects"]; snapshot: ScopedSnapshotState }>("/analytics/kanban/scopes/epics", { query: params }),
     staleTime: 30_000,
     enabled,
     placeholderData: (previous) => previous,
+    refetchInterval: (query) => query.state.data?.snapshot.status === "refreshing" ? 2_000 : false,
+  });
+}
+
+export function useRefreshScopedKanbanEpics() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (params: { project_slugs?: string; status_ids?: string; search?: string; page?: number; page_size?: number }) =>
+      api.get("/analytics/kanban/scopes/epics", { query: { ...params, force_refresh: true } }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["kanban-analytics", "epics"] }),
   });
 }
 
@@ -843,6 +862,8 @@ export type ReleaseListParams = {
   project_id?: number;
   status?: ReleaseStatus;
   owner_user_id?: number;
+  planned_from?: string;
+  planned_to?: string;
   overdue?: boolean;
   archived?: boolean;
   page?: number;
@@ -911,7 +932,7 @@ export function useUpdateRelease(id: number) {
 export function useTransitionRelease(id: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { target_status: ReleaseStatus; release_note?: string | null }) => api.post<{ release: ApiRelease; assessment: ApiReleaseOverview }>(`/releases/${id}/status-transitions`, body),
+    mutationFn: (body: { target_status: ReleaseStatus; release_note?: string | null }) => api.post<{ release: ApiRelease; assessment: ApiReleaseAssessment }>(`/releases/${id}/status-transitions`, body),
     onSuccess: () => invalidateReleaseQueries(qc, id),
   });
 }
@@ -921,6 +942,31 @@ export function useManageReleaseEpics(id: number) {
   return useMutation({
     mutationFn: (body: { epic_ids: number[]; correction_reason?: string }) => api.post<ApiRelease>(`/releases/${id}/epics`, body),
     onSuccess: () => invalidateReleaseQueries(qc, id),
+  });
+}
+
+export function useRemoveReleaseEpic(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ epicId, correctionReason }: { epicId: number; correctionReason?: string }) =>
+      api.delete<ApiRelease>(`/releases/${id}/epics/${epicId}`, { query: correctionReason ? { correction_reason: correctionReason } : {} }),
+    onSuccess: () => invalidateReleaseQueries(qc, id),
+  });
+}
+
+export function useArchiveRelease(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post<ApiRelease>(`/releases/${id}/archive`),
+    onSuccess: () => invalidateReleaseQueries(qc, id),
+  });
+}
+
+export function useDeleteRelease(id: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete<void>(`/releases/${id}`),
+    onSuccess: () => invalidateReleaseQueries(qc),
   });
 }
 
@@ -961,16 +1007,19 @@ export function useCreateEpic() {
       project_id: number;
       title: string;
       jira_url: string;
+      jira_jql?: string | null;
       confluence_url?: string;
       kanban_url?: string | null;
       design_url?: string | null;
       notes?: string | null;
       qa_estimate_hours?: number | null;
+      qa_member_ids?: number[];
       lead_analyst_id?: number | null;
       lead_designer_id?: number | null;
       expert_id?: number | null;
       start_date?: string | null;
       target_date?: string | null;
+      status?: "new" | "in-progress" | "released";
     }) => api.post<ApiEpic>("/epics", body),
     onSuccess: async () => {
       await refetchDataBridgeRoots(qc, ["epics", "activity"]);
@@ -994,6 +1043,14 @@ export function useUpdateEpic(epicId: number) {
       await qc.refetchQueries({ queryKey: queryKeys.epic(epicId) });
       await refetchDataBridgeRoots(qc, ["epics"]);
     },
+  });
+}
+
+export function useRefreshEpicTestOps(epicId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.post(`/epics/${epicId}/testops/refresh`),
+    onSuccess: () => qc.refetchQueries({ queryKey: queryKeys.epic(epicId) }),
   });
 }
 

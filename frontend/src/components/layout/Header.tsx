@@ -27,6 +27,7 @@ const routeLabels: Record<string, string> = {
   "/inbox": "Входящие",
   "/questions": "Вопросы",
   "/epics": "Эпики",
+  "/releases": "Релизы",
   "/activity": "Активность",
   "/statistics": "Статистика",
   "/users": "Пользователи",
@@ -95,6 +96,17 @@ function Breadcrumb() {
         </Link>
         <ChevronRight size={14} className="hidden text-muted-foreground/50 sm:block" />
         <span className="truncate font-medium text-foreground">{id}</span>
+      </div>
+    );
+  }
+
+  if (location.startsWith("/releases/") && location !== "/releases/") {
+    const id = location.split("/")[2];
+    return (
+      <div className="flex min-w-0 items-center gap-1 text-sm">
+        <Link href="/releases" className="text-muted-foreground hover:text-foreground">Релизы</Link>
+        <ChevronRight size={14} className="shrink-0 text-muted-foreground/50" />
+        <span className="truncate font-medium text-foreground">Релиз #{id}</span>
       </div>
     );
   }

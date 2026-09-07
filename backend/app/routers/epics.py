@@ -351,7 +351,7 @@ def _epic_read(db: Session, epic: Epic, user: User | None = None) -> EpicRead:
     read_obj.comments = _comments_read(db, epic)
     read_obj.history = _history_read(db, epic)
     read_obj.blockers = [_blocker_to_read(b) for b in (epic.blockers or [])]
-    read_obj.test_runs = [EpicTestRunRead.model_validate(r) for r in (epic.test_runs or [])]
+    read_obj.test_runs = [_test_run_read(r) for r in (epic.test_runs or [])]
     read_obj.open_questions_count = _open_questions_count(db, epic.id)
     membership = db.scalar(
         select(ReleaseEpicMembership)
@@ -367,6 +367,27 @@ def _epic_read(db: Session, epic: Epic, user: User | None = None) -> EpicRead:
             "status": linked.status.value if hasattr(linked.status, "value") else str(linked.status).lower(),
         }
     return read_obj
+
+
+def _test_run_read(run: EpicTestRun) -> EpicTestRunRead:
+    payload = {
+        "id": run.id, "epic_id": run.epic_id, "environment": run.environment,
+        "status": run.status, "url": run.url, "testops_launch_id": run.testops_launch_id,
+        "started_at": run.started_at, "finished_at": run.finished_at, "created_at": run.created_at,
+        "testops_snapshot": None,
+    }
+    snapshot = run.testops_snapshot
+    if snapshot:
+        payload["testops_snapshot"] = {
+            "status": snapshot.status, "total": snapshot.total, "passed": snapshot.passed,
+            "failed": snapshot.failed, "broken": snapshot.broken, "blocked": snapshot.blocked,
+            "in_progress": snapshot.in_progress, "synced_at": snapshot.synced_at,
+            "problem_cases": [{
+                "id": case.id, "title": case.case_name, "status": case.status,
+                "comment": case.safe_comment, "url": case.external_url, "defect_key": case.defect_key,
+            } for case in snapshot.problem_cases],
+        }
+    return EpicTestRunRead.model_validate(payload)
 
 
 def _normalize_items(items: list[dict] | list[EpicTestPlanItem]) -> list[dict]:
@@ -1124,7 +1145,7 @@ def list_test_runs(
         raise HTTPException(status_code=404, detail="Epic not found")
     if not AccessPolicy.can_view_epic(user, epic):
         raise HTTPException(status_code=403, detail="Access denied")
-    return [EpicTestRunRead.model_validate(r) for r in (epic.test_runs or [])]
+    return [_test_run_read(r) for r in (epic.test_runs or [])]
 
 
 @router.post(
@@ -1163,7 +1184,7 @@ def create_test_run(
     db.commit()
     db.refresh(run)
     publish_event([], "epic.updated", {"epic_id": epic.id, "kind": "test_run_added"})
-    return EpicTestRunRead.model_validate(run)
+    return _test_run_read(run)
 
 
 @router.patch("/{epic_id}/test-runs/{run_id}", response_model=EpicTestRunRead)
@@ -1206,7 +1227,7 @@ def update_test_run(
     db.commit()
     db.refresh(run)
     publish_event([], "epic.updated", {"epic_id": epic.id, "kind": "test_run_updated"})
-    return EpicTestRunRead.model_validate(run)
+    return _test_run_read(run)
 
 
 @router.delete("/{epic_id}/test-runs/{run_id}", status_code=http_status.HTTP_204_NO_CONTENT)

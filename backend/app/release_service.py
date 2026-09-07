@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from typing import Any, Iterable
+from urllib.parse import quote
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
@@ -336,6 +337,47 @@ def build_release_assessment(
     counts: dict[str, int] = {}
     for item in actual:
         counts[item["kind"]] = counts.get(item["kind"], 0) + 1
+    jira_unique = {row.jira_issue_key: row for row in jira_rows}
+    jira_by_status: dict[str, int] = {}
+    jira_by_priority: dict[str, int] = {}
+    jira_by_type: dict[str, int] = {}
+    for issue in jira_unique.values():
+        for target, value in ((jira_by_status, issue.status), (jira_by_priority, issue.priority), (jira_by_type, issue.issue_type)):
+            label = str(value or "Не задано")
+            target[label] = target.get(label, 0) + 1
+
+    qa_counts = {key: 0 for key in ("total", "passed", "failed", "broken", "blocked", "in_progress")}
+    current_runs: list[dict[str, Any]] = []
+    for epic in epics:
+        active_stage = str(epic.qa_block.active_test_stage if epic.qa_block else "test").lower()
+        run = next((candidate for candidate in epic.test_runs or [] if str(candidate.environment).lower() == active_stage), None)
+        snapshot = run.testops_snapshot if run else None
+        if snapshot:
+            for key in qa_counts:
+                qa_counts[key] += int(getattr(snapshot, key, 0) or 0)
+        current_runs.append({
+            "epic": {"id": epic.id, "key": f"EP-{epic.id:03d}", "title": epic.title},
+            "environment": active_stage,
+            "run": None if run is None else {
+                "id": run.id, "status": run.status, "url": run.url,
+                "snapshot": None if snapshot is None else {
+                    "status": snapshot.status, "total": snapshot.total, "passed": snapshot.passed,
+                    "failed": snapshot.failed, "broken": snapshot.broken, "blocked": snapshot.blocked,
+                    "in_progress": snapshot.in_progress, "synced_at": snapshot.synced_at,
+                },
+            },
+        })
+    qa_counts["completed"] = qa_counts["passed"] + qa_counts["failed"] + qa_counts["broken"] + qa_counts["blocked"]
+    qa_counts["progress_percent"] = round(qa_counts["completed"] / qa_counts["total"] * 100) if qa_counts["total"] else 0
+
+    tickets = db.scalars(select(Ticket).where(Ticket.epic_id.in_(epic_ids))).all() if epic_ids else []
+    open_tickets = [ticket for ticket in tickets if ticket.status in OPEN_TICKET_STATUSES]
+    overdue_questions = sum(1 for ticket in open_tickets if ticket.due_at and ticket.due_at < now)
+    waiting_expert = sum(1 for ticket in open_tickets if ticket.status == TicketStatus.FORWARDED)
+    issue_keys = sorted(jira_unique)
+    jira_base = next((row.browser_url.split("/browse/")[0] for row in jira_unique.values() if "/browse/" in row.browser_url), None)
+    jira_search_url = f"{jira_base}/issues/?jql={quote('issuekey in (' + ','.join(issue_keys) + ')')}" if jira_base and issue_keys else None
+
     return {
         "readiness": readiness,
         "actual_risks": actual,
@@ -348,7 +390,14 @@ def build_release_assessment(
             "open_questions": sum(_open_questions_count(db, epic.id) for epic in epics),
             "local_blockers": sum(1 for epic in epics for blocker in epic.blockers or [] if blocker.resolved_at is None),
             "risk_counts": counts,
+            "qa": qa_counts,
+            "jira": {"total": len(jira_unique), "by_status": jira_by_status, "by_priority": jira_by_priority, "by_type": jira_by_type},
+            "questions": {"open": len(open_tickets), "overdue": overdue_questions, "waiting_expert": waiting_expert},
         },
+        "current_test_runs": current_runs,
+        "key_jira_tasks": [{"key": row.jira_issue_key, "title": row.summary, "status": row.status, "priority": row.priority, "url": row.browser_url} for row in list(jira_unique.values())[:8]],
+        "key_questions": [{"id": row.id, "key": f"Q-{row.id:03d}", "title": row.title or row.description, "status": row.status.value, "overdue": bool(row.due_at and row.due_at < now), "url": f"/questions/Q-{row.id:03d}"} for row in open_tickets[:8]],
+        "jira_search_url": jira_search_url,
     }
 
 

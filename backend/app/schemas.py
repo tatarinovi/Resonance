@@ -513,6 +513,27 @@ class EpicBlockerUpdate(BaseModel):
     resolved: bool | None = None
 
 
+class EpicTestOpsProblemCaseRead(BaseModel):
+    id: int
+    title: str
+    status: str
+    comment: str | None = None
+    url: str | None = None
+    defect_key: str | None = None
+
+
+class EpicTestOpsSnapshotRead(BaseModel):
+    status: str
+    total: int
+    passed: int
+    failed: int
+    broken: int
+    blocked: int
+    in_progress: int
+    synced_at: ApiDatetime
+    problem_cases: list[EpicTestOpsProblemCaseRead] = Field(default_factory=list)
+
+
 class EpicTestRunRead(BaseModel):
     id: int
     epic_id: int
@@ -523,6 +544,7 @@ class EpicTestRunRead(BaseModel):
     started_at: ApiDatetime | None
     finished_at: ApiDatetime | None
     created_at: ApiDatetime
+    testops_snapshot: EpicTestOpsSnapshotRead | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -105,7 +105,7 @@ export function AppShell({ children }: AppShellProps) {
   const realtimeStatus = useEventStream({ enabled: true });
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
+    <div className="flex h-dvh overflow-hidden bg-background">
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-30 bg-black/50 md:hidden"

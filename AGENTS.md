@@ -34,7 +34,7 @@ backend/
     realtime.py              process-local SSE event bus
     kanban_client.py         external Kanban HTTP client and normalization
     storage.py               S3/MinIO access
-  migrations/versions/       linear Alembic history; current head is 0018
+  migrations/versions/       linear Alembic history; current head is 0019
   tests/                     pytest API/unit coverage
   docs/                      notification and Kanban implementation notes
 frontend/
@@ -172,6 +172,7 @@ ENV_FILE=.env.example docker compose \
 - Matrix/Telegram: homeserver/user/token/device/password, enable flags, proxy/name;
 - storage: S3 endpoint/access/secret/bucket/public URL/upload limit;
 - integrations: `INTEGRATION_CREDENTIALS_FERNET_KEY` is mandatory and must be a ready Fernet key; `INTEGRATION_CONNECTION_CHECK_TIMEOUT_SECONDS` controls connection checks. `EPIC_JIRA_REFRESH_TIMEOUT_SECONDS`, `EPIC_JIRA_PAGE_SIZE` and `EPIC_JIRA_MAX_ISSUES` bound manual Epic task refreshes. Credentials live only in `integration_connections`, never in user records or responses.
+- Release refresh: `RELEASE_REFRESH_REQUEST_TIMEOUT_SECONDS=30` is the timeout for each individual Jira/TestOps HTTP request; `RELEASE_REFRESH_WALL_CLOCK_SECONDS=90` is the wall-clock budget for the whole Release refresh. `RELEASE_REFRESH_CONCURRENCY` bounds concurrent Epic/source operations.
 
 `JWT_SECRET` is mandatory, rejects common placeholders, and must be at least 16 characters. Never print or copy values from the root `.env`; it is a real ignored local file. Do not commit `.env`, `.env.local`, `.env.production`, tokens, generated credentials, database dumps, or MinIO data. Example env files must contain non-production placeholders only.
 
@@ -265,15 +266,21 @@ There are three related paths:
 
 Kanban credentials are global and administrator-managed through `GET/PATCH/POST/DELETE /api/integrations`; Jira and TestOps currently support setup and connection checks only. Epic Jira tasks are a separate, simple cache: project members read `GET /api/epics/{id}/jira-issues`; coordinators/admins run `POST /api/epics/{id}/jira-issues/refresh` from the epic JQL. There is no Epic sync worker, scheduler or release-analytics dashboard. The migration seeds exactly one row for each supported type. Never lazily create one or fall back to `User.kanban_token`; the legacy per-user poll is disabled. External payloads are inconsistent, so keep normalization centralized and defensive. Preserve request timeout diagnostics and avoid exposing tokens in errors/logs.
 
+### Attachment delivery
+
+Uploads reject HTML/XHTML and SVG by MIME type and extension. New S3 objects use `Content-Disposition: attachment` because client-supplied MIME types are untrusted. Blocking S3 calls run in a thread pool so they do not stall the API event loop. This metadata does not retroactively change existing objects.
+
 ### Database changes
 
-Never use `Base.metadata.create_all()` as a schema-change mechanism. Add a new linear Alembic revision after `0018_release_center`, update ORM and Pydantic/frontend DTOs together, and run `tests/test_alembic.py`. Migrations must work for both empty databases and upgrades from the previous head. `bootstrap.py` contains deliberate compatibility logic for databases that predate Alembic; do not remove it casually.
+Never use `Base.metadata.create_all()` as a schema-change mechanism. Add a new linear Alembic revision after `0019_scoped_release`, update ORM and Pydantic/frontend DTOs together, and run `tests/test_alembic.py`. Migrations must work for both empty databases and upgrades from the previous head. `bootstrap.py` contains deliberate compatibility logic for databases that predate Alembic; do not remove it casually.
 
 ## Frontend design
 
 ### Provider and routing structure
 
 `main.tsx` loads static fonts/styles and renders `App`. `App.tsx` owns the `QueryClient`, theme provider, tooltip provider, auth provider, router, public auth routes, protected shell routes, and admin guards. `RequireAuth` and `RequireAdmin` are the route boundaries. Add new routes in `App.tsx` and navigation entries in `lib/navigation.ts` when applicable.
+
+Protected page modules are lazy-loaded in `App.tsx`; `ShellRoute` keeps the shell visible behind a page-level Suspense loading state. Public authentication pages load eagerly.
 
 Pages/components inherited from a reference UI may import the wouter-like API from `lib/router.tsx`; it is a compatibility adapter over React Router. Do not replace it piecemeal unless the affected consumers are migrated and tested.
 
@@ -353,6 +360,7 @@ Before handoff:
 
 - `deploy/` is the only supported deployment tree; avoid introducing parallel root-level deployment files.
 - Realtime is process-local, so increasing API workers silently breaks consistent SSE delivery.
+- The per-Release refresh lock is also process-local. It is correct only under the current single-backend-process deployment and is not a distributed lock; multiple API workers or hosts require PostgreSQL advisory locking, Redis, or persisted refresh coordination.
 - `DataBridge` means a successful mutation can still leave old screens stale unless list refetch + bridge bump are correct.
 - Admin unrestricted access is represented by an empty allowed-project list; do not interpret it as “no access”.
 - The ORM and Pydantic modules both define QA enums; keep their values synchronized with frontend unions/reference data.

@@ -1,267 +1,109 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { DatePickerButton } from "@/components/shared/DatePickerButton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { projects } from "@/data/projects";
 import { users } from "@/data/users";
-import { DatePickerButton } from "@/components/shared/DatePickerButton";
-import { useLocation } from "@/lib/router";
-import { useCreateEpic } from "@/lib/queries";
-import { epicIdToRef, refIdToNumeric } from "@/lib/mappers";
 import { useIsNotaWorkspace } from "@/hooks/useIsNotaWorkspace";
+import { epicIdToRef, projectIdToRef, refIdToNumeric, userIdToRef } from "@/lib/mappers";
+import { useCreateEpic, useUpdateEpic } from "@/lib/queries";
+import { useLocation } from "@/lib/router";
+import type { ApiEpic, EpicStatus } from "@/lib/types";
 
-interface CreateEpicDialogProps {
+interface EpicFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** Предзаполнить проект из фильтра сайдбара */
   defaultProjectRefId?: string | null;
+  epic?: ApiEpic | null;
 }
 
-function optionalUserId(refId: string): number | undefined {
-  if (!refId || refId === "none") return undefined;
-  return refIdToNumeric(refId) ?? undefined;
-}
+type FormState = {
+  title: string; projectId: string; status: EpicStatus; startDate: string; targetDate: string;
+  jiraUrl: string; jiraJql: string; confluenceUrl: string; kanbanUrl: string; designUrl: string;
+  notes: string; leadAnalystId: string; leadDesignerId: string; expertId: string;
+  qaEstimateHours: string; qaMemberIds: string[];
+};
 
-export function CreateEpicDialog({ open, onOpenChange, defaultProjectRefId }: CreateEpicDialogProps) {
+const emptyForm = (projectId = ""): FormState => ({
+  title: "", projectId, status: "new", startDate: "", targetDate: "", jiraUrl: "", jiraJql: "",
+  confluenceUrl: "", kanbanUrl: "", designUrl: "", notes: "", leadAnalystId: "none",
+  leadDesignerId: "none", expertId: "none", qaEstimateHours: "", qaMemberIds: [],
+});
+const optionalId = (value: string) => value === "none" ? null : refIdToNumeric(value);
+const fieldClass = "mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-primary/50";
+
+export function CreateEpicDialog({ open, onOpenChange, defaultProjectRefId, epic }: EpicFormDialogProps) {
+  const editing = Boolean(epic);
   const [, setLocation] = useLocation();
   const createEpic = useCreateEpic();
+  const updateEpic = useUpdateEpic(epic?.id ?? -1);
   const hideKanban = useIsNotaWorkspace();
-
-  const [title, setTitle] = useState("");
-  const [projectId, setProjectId] = useState("");
-  const [jiraUrl, setJiraUrl] = useState("");
-  const [confluenceUrl, setConfluenceUrl] = useState("");
-  const [kanbanUrl, setKanbanUrl] = useState("");
-  const [designUrl, setDesignUrl] = useState("");
-  const [notes, setNotes] = useState("");
-  const [leadAnalystId, setLeadAnalystId] = useState("none");
-  const [leadDesignerId, setLeadDesignerId] = useState("none");
-  const [startDate, setStartDate] = useState("");
-  const [targetDate, setTargetDate] = useState("");
+  const [form, setForm] = useState<FormState>(() => emptyForm(defaultProjectRefId ?? ""));
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) => setForm((current) => ({ ...current, [key]: value }));
 
   useEffect(() => {
     if (!open) return;
-    setTitle("");
-    setProjectId(defaultProjectRefId ?? "");
-    setJiraUrl("");
-    setConfluenceUrl("");
-    setKanbanUrl("");
-    setDesignUrl("");
-    setNotes("");
-    setLeadAnalystId("none");
-    setLeadDesignerId("none");
-    setStartDate("");
-    setTargetDate("");
-  }, [open, defaultProjectRefId]);
+    if (!epic) { setForm(emptyForm(defaultProjectRefId ?? "")); return; }
+    setForm({
+      title: epic.title, projectId: projectIdToRef(epic.project_id), status: epic.status,
+      startDate: epic.start_date?.slice(0, 10) ?? "", targetDate: epic.target_date?.slice(0, 10) ?? "",
+      jiraUrl: epic.jira_url ?? "", jiraJql: epic.jira_jql ?? "", confluenceUrl: epic.confluence_url ?? "",
+      kanbanUrl: epic.kanban_url ?? "", designUrl: epic.design_url ?? "", notes: epic.notes ?? "",
+      leadAnalystId: epic.lead_analyst_id == null ? "none" : userIdToRef(epic.lead_analyst_id),
+      leadDesignerId: epic.lead_designer_id == null ? "none" : userIdToRef(epic.lead_designer_id),
+      expertId: epic.expert_id == null ? "none" : userIdToRef(epic.expert_id),
+      qaEstimateHours: epic.qa_estimate_hours == null ? "" : String(epic.qa_estimate_hours),
+      qaMemberIds: epic.qa_member_ids.map(userIdToRef),
+    });
+  }, [open, epic, defaultProjectRefId]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const t = title.trim();
-    if (!t) {
-      toast.error("Введите название эпика");
-      return;
-    }
-    if (!projectId) {
-      toast.error("Выберите проект");
-      return;
-    }
-    const pid = refIdToNumeric(projectId);
-    if (pid == null) {
-      toast.error("Некорректный проект");
-      return;
-    }
+  const projectUsers = useMemo(() => {
+    const pid = refIdToNumeric(form.projectId);
+    return users.filter((user) => !pid || !user.projectIds?.length || user.projectIds.includes(projectIdToRef(pid)));
+  }, [form.projectId]);
 
+  const submit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const projectId = refIdToNumeric(form.projectId);
+    if (!form.title.trim()) return void toast.error("Введите название эпика");
+    if (!projectId) return void toast.error("Выберите проект");
+    const qaEstimate = form.qaEstimateHours.trim() ? Number(form.qaEstimateHours) : null;
+    if (qaEstimate != null && (!Number.isFinite(qaEstimate) || qaEstimate < 0)) return void toast.error("Проверьте оценку QA");
+    const body = {
+      title: form.title.trim(), status: form.status, start_date: form.startDate || null, target_date: form.targetDate || null,
+      jira_url: form.jiraUrl.trim(), jira_jql: form.jiraJql.trim() || null, confluence_url: form.confluenceUrl.trim(),
+      ...(hideKanban ? {} : { kanban_url: form.kanbanUrl.trim() || null }), design_url: form.designUrl.trim() || null,
+      notes: form.notes.trim() || null, lead_analyst_id: optionalId(form.leadAnalystId),
+      lead_designer_id: optionalId(form.leadDesignerId), expert_id: optionalId(form.expertId),
+      qa_estimate_hours: qaEstimate, qa_member_ids: form.qaMemberIds.map(refIdToNumeric).filter((id): id is number => id != null),
+    };
     try {
-      const created = await createEpic.mutateAsync({
-        project_id: pid,
-        title: t,
-        jira_url: jiraUrl.trim() || "#",
-        confluence_url: confluenceUrl.trim(),
-        ...(hideKanban ? {} : { kanban_url: kanbanUrl.trim() || null }),
-        design_url: designUrl.trim() || null,
-        notes: notes.trim() || null,
-        lead_analyst_id: optionalUserId(leadAnalystId) ?? null,
-        lead_designer_id: optionalUserId(leadDesignerId) ?? null,
-        expert_id: null,
-        start_date: startDate.trim() || null,
-        target_date: targetDate.trim() || null,
-      });
-      toast.success("Эпик создан");
+      if (epic) {
+        await updateEpic.mutateAsync(body);
+        toast.success("Эпик обновлён");
+      } else {
+        const created = await createEpic.mutateAsync({ project_id: projectId, ...body });
+        toast.success("Эпик создан");
+        setLocation(`/epics/${epicIdToRef(created.id)}`);
+      }
       onOpenChange(false);
-      setLocation(`/epics/${epicIdToRef(created.id)}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Не удалось создать эпик";
-      toast.error(message);
-    }
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Не удалось сохранить эпик"); }
   };
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg mx-4 max-h-[min(90vh,720px)] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Новый эпик</DialogTitle>
-          <DialogDescription className="sr-only">Форма создания эпика: название, проект и ссылки.</DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-3 mt-1">
-          <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Название *</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="Краткое название эпика"
-              className="w-full px-3 py-2 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
-              data-testid="input-epic-title"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Проект *</label>
-            <Select value={projectId} onValueChange={setProjectId}>
-              <SelectTrigger className="text-sm" data-testid="select-epic-project">
-                <SelectValue placeholder="Выберите проект" />
-              </SelectTrigger>
-              <SelectContent>
-                {projects.map((p) => (
-                  <SelectItem key={p.id} value={p.id}>
-                    {p.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+  const pending = createEpic.isPending || updateEpic.isPending;
+  const textField = (label: string, key: keyof Pick<FormState, "jiraUrl"|"jiraJql"|"confluenceUrl"|"kanbanUrl"|"designUrl">, multiline = false) => <div><label className="text-xs font-medium text-muted-foreground">{label}</label>{multiline ? <textarea value={form[key]} onChange={(e) => set(key, e.target.value)} rows={2} className={fieldClass} /> : <input value={form[key]} onChange={(e) => set(key, e.target.value)} placeholder="Необязательно" className={fieldClass} />}</div>;
+  const userSelect = (label: string, key: "leadAnalystId"|"leadDesignerId"|"expertId") => <div><label className="text-xs font-medium text-muted-foreground">{label}</label><Select value={form[key]} onValueChange={(value) => set(key, value)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="none">—</SelectItem>{projectUsers.map((user) => <SelectItem key={user.id} value={user.id}>{user.name}</SelectItem>)}</SelectContent></Select></div>;
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Старт</label>
-              <DatePickerButton value={startDate} onChange={setStartDate} testId="input-epic-start-date" />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Целевая дата</label>
-              <DatePickerButton value={targetDate} onChange={setTargetDate} testId="input-epic-target-date" />
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Jira</label>
-              <input
-                value={jiraUrl}
-                onChange={(e) => setJiraUrl(e.target.value)}
-                placeholder="https://… (пусто → заглушка)"
-                className="w-full px-3 py-2 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
-                data-testid="input-epic-jira"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Confluence</label>
-              <input
-                value={confluenceUrl}
-                onChange={(e) => setConfluenceUrl(e.target.value)}
-                placeholder="Необязательно"
-                className="w-full px-3 py-2 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
-              />
-            </div>
-          </div>
-          {hideKanban ? (
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Дизайн</label>
-              <input
-                value={designUrl}
-                onChange={(e) => setDesignUrl(e.target.value)}
-                placeholder="Необязательно"
-                className="w-full px-3 py-2 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
-              />
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Kanban</label>
-                <input
-                  value={kanbanUrl}
-                  onChange={(e) => setKanbanUrl(e.target.value)}
-                  placeholder="Необязательно"
-                  className="w-full px-3 py-2 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
-                />
-              </div>
-              <div>
-                <label className="text-xs font-medium text-muted-foreground block mb-1">Дизайн</label>
-                <input
-                  value={designUrl}
-                  onChange={(e) => setDesignUrl(e.target.value)}
-                  placeholder="Необязательно"
-                  className="w-full px-3 py-2 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50"
-                />
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label className="text-xs font-medium text-muted-foreground block mb-1">Заметки</label>
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Контекст, ссылки в тексте…"
-              rows={3}
-              className="w-full px-3 py-2 text-sm bg-background border border-input rounded-md focus:outline-none focus:ring-1 focus:ring-primary/50 resize-none"
-            />
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Лид аналитики</label>
-              <Select value={leadAnalystId} onValueChange={setLeadAnalystId}>
-                <SelectTrigger className="text-xs h-9">
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">—</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1">Лид дизайна</label>
-              <Select value={leadDesignerId} onValueChange={setLeadDesignerId}>
-                <SelectTrigger className="text-xs h-9">
-                  <SelectValue placeholder="—" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">—</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.id} value={u.id}>
-                      {u.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <button
-              type="button"
-              onClick={() => onOpenChange(false)}
-              className="px-4 py-2 text-sm border border-border rounded-md text-muted-foreground hover:text-foreground"
-            >
-              Отмена
-            </button>
-            <button
-              type="submit"
-              disabled={createEpic.isPending}
-              className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md flex items-center gap-2 disabled:opacity-70"
-              data-testid="button-submit-epic"
-            >
-              {createEpic.isPending && <Loader2 size={14} className="animate-spin" />}
-              Создать
-            </button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
+  return <Dialog open={open} onOpenChange={onOpenChange}><DialogContent className="max-w-2xl mx-4 max-h-[90vh] overflow-y-auto"><DialogHeader><DialogTitle>{editing ? "Редактировать эпик" : "Новый эпик"}</DialogTitle><DialogDescription>Основные данные, интеграции и QA-команда эпика.</DialogDescription></DialogHeader><form onSubmit={submit} className="space-y-4">
+    <div className="grid gap-3 sm:grid-cols-2"><div><label className="text-xs font-medium text-muted-foreground">Название *</label><input value={form.title} onChange={(e) => set("title", e.target.value)} className={fieldClass} data-testid="input-epic-title" /></div><div><label className="text-xs font-medium text-muted-foreground">Проект *</label><Select value={form.projectId} onValueChange={(value) => set("projectId", value)} disabled={editing}><SelectTrigger className="mt-1" data-testid="select-epic-project"><SelectValue placeholder="Выберите проект" /></SelectTrigger><SelectContent>{projects.map((project) => <SelectItem key={project.id} value={project.id}>{project.name}</SelectItem>)}</SelectContent></Select></div></div>
+    <div className="grid gap-3 sm:grid-cols-3"><div><label className="text-xs font-medium text-muted-foreground">Статус</label><Select value={form.status} onValueChange={(value) => set("status", value as EpicStatus)}><SelectTrigger className="mt-1"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="new">Новый</SelectItem><SelectItem value="in-progress">В работе</SelectItem><SelectItem value="released">Выпущен</SelectItem></SelectContent></Select></div><div><label className="text-xs font-medium text-muted-foreground">Старт</label><DatePickerButton value={form.startDate} onChange={(value) => set("startDate", value)} /></div><div><label className="text-xs font-medium text-muted-foreground">Целевая дата</label><DatePickerButton value={form.targetDate} onChange={(value) => set("targetDate", value)} /></div></div>
+    <div className="grid gap-3 sm:grid-cols-2">{textField("Jira", "jiraUrl")}{textField("Jira JQL", "jiraJql", true)}{textField("Confluence", "confluenceUrl")}{!hideKanban && textField("Kanban", "kanbanUrl")}{textField("Дизайн", "designUrl")}</div>
+    <div><label className="text-xs font-medium text-muted-foreground">Описание / заметки</label><textarea value={form.notes} onChange={(e) => set("notes", e.target.value)} rows={3} className={fieldClass} /></div>
+    <div className="grid gap-3 sm:grid-cols-3">{userSelect("Лид аналитики", "leadAnalystId")}{userSelect("Лид дизайна", "leadDesignerId")}{userSelect("Эксперт", "expertId")}</div>
+    <div className="grid gap-3 sm:grid-cols-[180px_1fr]"><div><label className="text-xs font-medium text-muted-foreground">Оценка QA, ч</label><input type="number" min="0" step="0.5" value={form.qaEstimateHours} onChange={(e) => set("qaEstimateHours", e.target.value)} className={fieldClass} /></div><div><label className="text-xs font-medium text-muted-foreground">Участники QA</label><div className="mt-1 max-h-28 overflow-y-auto rounded-md border border-input p-2 grid gap-1 sm:grid-cols-2">{projectUsers.map((user) => <label key={user.id} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={form.qaMemberIds.includes(user.id)} onChange={() => set("qaMemberIds", form.qaMemberIds.includes(user.id) ? form.qaMemberIds.filter((id) => id !== user.id) : [...form.qaMemberIds, user.id])} />{user.name}</label>)}</div></div></div>
+    <div className="flex justify-end gap-2"><button type="button" onClick={() => onOpenChange(false)} className="px-4 py-2 text-sm border border-border rounded-md">Отмена</button><button type="submit" disabled={pending} className="px-4 py-2 text-sm bg-primary text-primary-foreground rounded-md flex items-center gap-2 disabled:opacity-60" data-testid="button-submit-epic">{pending && <Loader2 size={14} className="animate-spin" />}{editing ? "Сохранить" : "Создать"}</button></div>
+  </form></DialogContent></Dialog>;
 }

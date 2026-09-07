@@ -753,10 +753,32 @@ class EpicTestOpsProblemCase(Base):
     snapshot: Mapped[EpicTestOpsSnapshot] = relationship("EpicTestOpsSnapshot", back_populates="problem_cases")
 
 
+class ScopedAnalyticsSnapshot(Base):
+    __tablename__ = "scoped_analytics_snapshots"
+
+    scope_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    scope_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    scope_json: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    data_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    last_success_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    refresh_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_attempt_failed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    error_message: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ReleaseSequenceCounter(Base):
+    __tablename__ = "release_sequence_counter"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    next_value: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
 class Release(Base):
     __tablename__ = "releases"
     __table_args__ = (
-        UniqueConstraint("project_id", "sequence_number", name="uq_release_project_sequence"),
+        UniqueConstraint("sequence_number", name="uq_release_sequence"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
