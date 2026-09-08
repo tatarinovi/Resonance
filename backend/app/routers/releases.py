@@ -9,11 +9,15 @@ import threading
 import time
 from typing import Any
 
+from fastapi.encoders import jsonable_encoder
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, selectinload
 
+from ..release_classification import status_group, priority_group, latest_issues, issue_rank
+from ..release_sources import kanban_scope, kanban_source
+from ..epic_testops_service import snapshot_read, problem_case_read
 from ..access_policy import AccessPolicy
 from ..config import get_settings
 from ..database import SessionLocal, get_db
@@ -321,6 +325,9 @@ def transition_release(release_id: int, payload: ReleaseTransitionRequest, user:
         raise HTTPException(status_code=409, detail="Release status transition is not allowed")
     old = release_status(release.status)
     assessment = build_release_assessment(db, release, target_status=target)
+    if target in {ReleaseStatus.READY, ReleaseStatus.RELEASED} and assessment["actual_risks"]:
+        if not payload.accept_risks or payload.risk_fingerprint != assessment["risk_fingerprint"]:
+            raise HTTPException(status_code=409, detail="Состав рисков изменился или не подтверждён. Просмотрите оценку и подтвердите принятие рисков.")
     release.status = target
     if target == ReleaseStatus.RELEASED:
         release.released_at = datetime.utcnow()
@@ -330,6 +337,8 @@ def transition_release(release_id: int, payload: ReleaseTransitionRequest, user:
         for membership in current_memberships(release):
             membership.is_active = False
     add_release_audit(db, release, user, "status_changed", {
+        "accepted_risks": [item["id"] + ": " + item["message"] for item in assessment["actual_risks"]] if payload.accept_risks else [],
+        "risk_fingerprint": assessment["risk_fingerprint"],
         "old_status": old.value,
         "new_status": target.value,
     })
@@ -462,6 +471,9 @@ def release_tasks(
     epic_id: int | None = None,
     status_filter: str | None = Query(None, alias="status"),
     priority: str | None = None,
+    status_group_filter: str | None = Query(None, alias="status_group"),
+    priority_group_filter: str | None = Query(None, alias="priority_group"),
+    sort: str = "priority",
     assignee: str | None = None,
     issue_type: str | None = None,
     page: int = Query(1, ge=1),
@@ -472,29 +484,35 @@ def release_tasks(
     release = _release_or_404(db, release_id, user)
     epics = current_epics(release)
     allowed_ids = {epic.id for epic in epics}
-    if epic_id is not None:
-        allowed_ids &= {epic_id}
     rows = db.scalars(select(EpicJiraIssue).where(EpicJiraIssue.epic_id.in_(allowed_ids))).all() if allowed_ids else []
     epic_map = {epic.id: {"id": epic.id, "key": f"EP-{epic.id:03d}", "title": epic.title} for epic in epics}
-    deduped: dict[str, dict] = {}
-    for row in rows:
-        item = deduped.setdefault(row.jira_issue_key, {
-            "key": row.jira_issue_key, "title": row.summary, "status": row.status,
-            "priority": row.priority, "assignee": row.assignee_display_name,
-            "issue_type": row.issue_type, "url": row.browser_url, "refreshed_at": row.refreshed_at,
-            "source_epics": [],
-        })
-        item["source_epics"].append(epic_map[row.epic_id])
-    items = list(deduped.values())
+    deduped = latest_issues(rows)
+    items = [{"key": row.jira_issue_key, "title": row.summary, "status": row.status,
+              "status_group": status_group(row.status, row.status_category),
+              "is_done": status_group(row.status, row.status_category) == "done",
+              "priority_group": priority_group(row.priority), "priority": row.priority,
+              "assignee": row.assignee_display_name, "issue_type": row.issue_type,
+              "url": row.browser_url, "refreshed_at": row.refreshed_at,
+              "source_epics": [epic_map[i] for i in sorted({r.epic_id for r in rows if r.jira_issue_key == row.jira_issue_key})]}
+             for row in deduped.values()]
+    facets = {key: sorted({str(item[key]) for item in items if item.get(key)}) for key in ("status", "priority", "assignee", "issue_type")}
+    if epic_id is not None:
+        items = [item for item in items if any(e["id"] == epic_id for e in item["source_epics"])]
+    if status_group_filter:
+        items = [item for item in items if item["status_group"] == status_group_filter]
+    if priority_group_filter:
+        items = [item for item in items if item["priority_group"] == priority_group_filter and not item["is_done"]]
     lowered = (q or "").strip().casefold()
     if lowered:
         items = [item for item in items if lowered in f"{item['key']} {item['title']}".casefold()]
     for key, expected in (("status", status_filter), ("priority", priority), ("assignee", assignee), ("issue_type", issue_type)):
         if expected:
             items = [item for item in items if str(item.get(key) or "").casefold() == expected.casefold()]
-    items.sort(key=lambda item: item["key"])
+    if sort not in {"priority", "key", "status"}:
+        raise HTTPException(status_code=422, detail="Неизвестная сортировка")
+    items.sort(key=lambda item: (item["is_done"], item["key"] if sort == "key" else str(item["status"] or "") if sort == "status" else issue_rank(deduped[item["key"]])[1], item["key"]))
     total = len(items)
-    return {"items": items[(page - 1) * page_size:page * page_size], "total": total, "page": page, "page_size": page_size}
+    return {"items": items[(page - 1) * page_size:page * page_size], "total": total, "page": page, "page_size": page_size, "facets": facets}
 
 
 @router.get("/{release_id}/qa")
@@ -514,20 +532,11 @@ def release_qa(
         runs = []
         for run in epic.test_runs or []:
             snapshot = db.get(EpicTestOpsSnapshot, run.id)
-            cases = db.scalars(select(EpicTestOpsProblemCase).where(EpicTestOpsProblemCase.test_run_id == run.id)).all() if snapshot else []
             runs.append({
                 "id": run.id, "environment": run.environment, "status": run.status, "url": run.url,
                 "started_at": run.started_at, "finished_at": run.finished_at,
                 "testops_launch_id": run.testops_launch_id,
-                "testops_snapshot": None if not snapshot else {
-                    "status": snapshot.status, "total": snapshot.total, "passed": snapshot.passed,
-                    "failed": snapshot.failed, "broken": snapshot.broken, "blocked": snapshot.blocked,
-                    "in_progress": snapshot.in_progress, "synced_at": snapshot.synced_at,
-                    "problem_cases": [{
-                        "id": case.id, "title": case.case_name, "status": case.status,
-                        "comment": case.safe_comment, "url": case.external_url, "defect_key": case.defect_key,
-                    } for case in cases],
-                },
+                "testops_snapshot": snapshot_read(snapshot),
             })
         items.append({
             "epic": {"id": epic.id, "key": f"EP-{epic.id:03d}", "title": epic.title},
@@ -538,11 +547,27 @@ def release_qa(
     return {"items": items, "total": total, "page": page, "page_size": page_size}
 
 
+@router.get("/{release_id}/qa/results")
+def release_qa_results(release_id: int, run_id: int | None = None, result_status: str | None = None,
+                       active_only: bool = False, page: int = Query(1, ge=1), page_size: int = Query(25, ge=1, le=100),
+                       user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    release = _release_or_404(db, release_id, user)
+    runs = {run.id: (epic, run) for epic in current_epics(release) for run in epic.test_runs
+            if (run_id is None or run.id == run_id) and (not active_only or run.environment == (epic.qa_block.active_test_stage if epic.qa_block else 'test'))}
+    stmt = select(EpicTestOpsProblemCase).where(EpicTestOpsProblemCase.test_run_id.in_(runs))
+    if result_status:
+        stmt = stmt.where(EpicTestOpsProblemCase.status == result_status)
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    cases = db.scalars(stmt.order_by(EpicTestOpsProblemCase.test_run_id, EpicTestOpsProblemCase.id).offset((page-1)*page_size).limit(page_size)).all()
+    return {"items": [{**problem_case_read(c), "run_id": c.test_run_id, "epic_key": f"EP-{runs[c.test_run_id][0].id:03d}", "environment": runs[c.test_run_id][1].environment} for c in cases], "total": total, "page": page, "page_size": page_size}
+
+
 @router.get("/{release_id}/questions")
 def release_questions(
     release_id: int,
     q: str | None = None,
     status_filter: str | None = Query(None, alias="status"),
+    view: str | None = None,
     epic_id: int | None = None,
     expert_id: int | None = None,
     page: int = Query(1, ge=1),
@@ -556,6 +581,13 @@ def release_questions(
     if epic_id is not None:
         ids &= {epic_id}
     stmt = select(Ticket).options(selectinload(Ticket.assignee), selectinload(Ticket.author)).where(Ticket.epic_id.in_(ids))
+    experts = db.execute(select(User.id, User.username).join(Ticket, Ticket.assignee_id == User.id).where(Ticket.epic_id.in_(ids)).distinct().order_by(User.username)).all()
+    if view in {"open", "overdue", "waiting"}:
+        stmt = stmt.where(Ticket.status.in_([TicketStatus.PENDING_APPROVAL, TicketStatus.FORWARDED, TicketStatus.RETURNED]))
+    if view == "overdue":
+        stmt = stmt.where(Ticket.due_at < datetime.utcnow())
+    if view == "waiting":
+        stmt = stmt.where(Ticket.status == TicketStatus.FORWARDED)
     if status_filter:
         try:
             stmt = stmt.where(Ticket.status == TicketStatus(status_filter))
@@ -577,25 +609,15 @@ def release_questions(
         "overdue": bool(row.due_at and row.due_at < datetime.utcnow() and row.status not in {TicketStatus.ANSWERED, TicketStatus.CLOSED, TicketStatus.CANCELLED}),
         "url": f"/questions/Q-{row.id:03d}",
     } for row in rows]
-    return {"items": items, "total": total, "page": page, "page_size": page_size}
+    return {"items": items, "total": total, "page": page, "page_size": page_size, "experts": [{"id": row.id, "username": row.username} for row in experts]}
 
 
 def _release_kanban_details(db: Session, release: Release) -> tuple[list[dict], dict]:
-    setting = db.get(AppSetting, "kanban_analytics_snapshot")
-    snapshot = setting.value_json if setting and isinstance(setting.value_json, dict) else {}
-    details = snapshot.get("epic_details") or {}
-    selected: list[dict] = []
-    for epic in current_epics(release):
-        if not epic.kanban_url:
-            continue
-        try:
-            slug, kanban_id = parse_kanban_reference(epic.kanban_url)
-        except ValueError:
-            continue
-        detail = details.get(f"{slug}:{kanban_id}")
-        if detail:
-            selected.append({"resonance_epic": {"id": epic.id, "key": f"EP-{epic.id:03d}", "title": epic.title}, **detail})
-    return selected, kanban_freshness(db)
+    key, _, _ = kanban_scope(release)
+    row = db.get(ScopedAnalyticsSnapshot, key)
+    epic_map = {e.id: {"id": e.id, "key": f"EP-{e.id:03d}", "title": e.title} for e in current_epics(release)}
+    items = (row.data_json or {}).get("items", []) if row else []
+    return [{**item, "resonance_epic": epic_map[item["epic_id"]]} for item in items if item["epic_id"] in epic_map], kanban_source(db, release)
 
 
 @router.get("/{release_id}/time-management/summary")
@@ -682,17 +704,26 @@ def _refresh_operation(epic_id: int, source: str, deadline: float) -> dict:
             linked_runs = [run for run in epic.test_runs or [] if run.testops_launch_id or parse_testops_launch_id(run.url)]
             if not linked_runs:
                 return {"epic_id": epic_id, "source": source, "status": "skipped", "error_code": "not_configured", "message": "No TestOps launches configured"}
-            count = 0
-            latest = None
+            run_results = []
             for run in linked_runs:
-                if time.monotonic() >= deadline:
-                    return {"epic_id": epic_id, "source": source, "status": "timed_out", "error_code": "wall_clock_timeout", "message": "Release refresh wall-clock budget exceeded", "previous_success_at": previous, "current_success_at": latest or previous}
-                data = fetch_testops_run(worker_db, run, timeout_seconds=get_settings().release_refresh_request_timeout_seconds, deadline=deadline)
-                if time.monotonic() >= deadline:
-                    return {"epic_id": epic_id, "source": source, "status": "timed_out", "error_code": "wall_clock_timeout", "message": "Release refresh wall-clock budget exceeded", "previous_success_at": previous, "current_success_at": latest or previous}
-                latest = replace_testops_snapshot(worker_db, run, data)
-                count += int(data.get("total") or 0)
-            return {"epic_id": epic_id, "source": source, "status": "refreshed", "count": count, "previous_success_at": previous, "current_success_at": latest}
+                try:
+                    data = fetch_testops_run(worker_db, run, timeout_seconds=get_settings().release_refresh_request_timeout_seconds, deadline=deadline)
+                    if time.monotonic() >= deadline:
+                        raise HTTPException(status_code=504, detail="TestOps request timed out.")
+                    updated = replace_testops_snapshot(worker_db, run, data)
+                    run_results.append({"run_id": run.id, "status": "refreshed", "current_success_at": updated})
+                except Exception as exc:
+                    worker_db.rollback()
+                    run.sync_attempt_at = datetime.utcnow()
+                    run.sync_error = "Не удалось обновить TestOps. Проверьте подключение и доступность рана."
+                    worker_db.commit()
+                    run_results.append({"run_id": run.id, "status": "failed", "message": run.sync_error})
+            success = sum(item["status"] == "refreshed" for item in run_results)
+            result_status = "refreshed" if success == len(run_results) else "partial" if success else "failed"
+            if result_status != "refreshed":
+                mark_testops_refresh_failure(worker_db, epic_id, "partial" if success else "refresh_failed", "Не все тест-раны обновлены.")
+            return {"epic_id": epic_id, "source": source, "status": result_status, "runs": run_results,
+                    "previous_success_at": previous, "current_success_at": max((item["current_success_at"] for item in run_results if item["status"] == "refreshed"), default=previous)}
         except Exception as exc:
             code, message = _safe_refresh_error(exc)
             if code == "timeout" and "wall-clock budget" in message.lower():
@@ -704,20 +735,10 @@ def _refresh_operation(epic_id: int, source: str, deadline: float) -> dict:
             return {"epic_id": epic_id, "source": source, "status": "failed", "error_code": code, "message": message}
 
 
-def _refresh_release_kanban_scope(db: Session, release: Release) -> dict[str, Any]:
-    refs: list[tuple[int, str, int]] = []
-    for epic in current_epics(release):
-        if not epic.kanban_url:
-            continue
-        try:
-            slug, task_id = parse_kanban_reference(epic.kanban_url)
-        except ValueError:
-            continue
-        refs.append((epic.id, slug, task_id))
+def _refresh_release_kanban_scope(db: Session, release: Release, deadline: float | None = None) -> dict[str, Any]:
+    key, scope, refs = kanban_scope(release)
     if not refs:
         return {"status": "skipped", "message": "У эпиков релиза нет ссылок Kanban"}
-    scope = {"type": "release_overview", "release_id": release.id, "epic_ids": sorted(epic_id for epic_id, _, _ in refs)}
-    key = hashlib.sha256(json.dumps(scope, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
     row = db.get(ScopedAnalyticsSnapshot, key)
     if row is None:
         row = ScopedAnalyticsSnapshot(scope_hash=key, scope_type="release_overview", scope_json=scope)
@@ -728,13 +749,19 @@ def _refresh_release_kanban_scope(db: Session, release: Release) -> dict[str, An
     row.last_attempt_at = now
     db.commit()
     try:
-        client = KanbanClient(token=require_global_kanban_token(db))
+        client = KanbanClient(token=require_global_kanban_token(db), deadline=deadline)
         items = []
         for epic_id, slug, task_id in refs:
             epic_payload = client.task(task_id)
             embedded = epic_payload.get("epic_by") if isinstance(epic_payload, dict) else None
             tasks = embedded if isinstance(embedded, list) else client.project_list_all(slug, [(f"filter[epic_id][{task_id}]", str(task_id))])
-            items.append({"epic_id": epic_id, "project_slug": slug, "kanban_epic_id": task_id, "epic": epic_payload, "tasks": tasks})
+            from .analytics import _worklog_rows_for_task
+            worklogs = []
+            for task in tasks:
+                if isinstance(task, dict) and task.get("id"):
+                    worklogs.extend(_worklog_rows_for_task(client, slug, int(task["id"]), task, {}, {}))
+            items.append({"epic_id": epic_id, "project_slug": slug, "kanban_epic_id": task_id, "epic": epic_payload, "tasks": tasks,
+                          "worklogs": worklogs, "summary": {"tracked_hours": round(sum(w["minutes"] for w in worklogs) / 60, 2)}})
         now = datetime.utcnow()
         row.data_json = {"items": items}
         row.last_success_at = now
@@ -776,15 +803,15 @@ def refresh_release(release_id: int, user: User = Depends(get_current_user), db:
             epic_id, source = futures[future]
             future.cancel()
             results.append({"epic_id": epic_id, "source": source, "status": "timed_out", "error_code": "wall_clock_timeout", "message": "Release refresh wall-clock budget exceeded"})
-        kanban_result = _refresh_release_kanban_scope(db, release)
-        statuses = [item["status"] for item in results] + (["refreshed"] if kanban_result["status"] in {"success", "skipped"} else ["failed"])
-        outcome = "success" if statuses and all(value in {"refreshed", "skipped"} for value in statuses) else ("partial" if any(value == "refreshed" for value in statuses) else "failed")
+        kanban_result = _refresh_release_kanban_scope(db, release, deadline)
+        statuses = [item["status"] for item in results] + [{"success": "refreshed", "skipped": "skipped"}.get(kanban_result["status"], "failed")]
+        outcome = "skipped" if all(value == "skipped" for value in statuses) else "success" if statuses and all(value in {"refreshed", "skipped"} for value in statuses) else ("partial" if any(value in {"refreshed", "partial"} for value in statuses) else "failed")
         fresh_release = db.scalar(release_query().where(Release.id == release_id))
         counts = {value: statuses.count(value) for value in set(statuses)}
         add_release_audit(db, fresh_release, user, "data_refreshed", {"outcome": outcome, "counts": counts})
         db.commit()
         publish_broadcast("release.updated", {"release_id": release_id, "project_id": release.project_id, "kind": "refresh"})
-        return {
+        response = {
             "release_id": release_id,
             "outcome": outcome,
             "started_at": started_at,
@@ -792,7 +819,7 @@ def refresh_release(release_id: int, user: User = Depends(get_current_user), db:
             "results": sorted(results, key=lambda item: (item["epic_id"], item["source"])),
             "sources": {
                 source: {
-                    "status": "success" if any(item["source"] == source and item["status"] == "refreshed" for item in results) and not any(item["source"] == source and item["status"] in {"failed", "timed_out"} for item in results) else ("partial" if any(item["source"] == source and item["status"] == "refreshed" for item in results) else "failed"),
+                    "status": "skipped" if all(item["status"] == "skipped" for item in results if item["source"] == source) else "success" if any(item["source"] == source and item["status"] == "refreshed" for item in results) and not any(item["source"] == source and item["status"] in {"failed", "timed_out", "partial"} for item in results) else ("partial" if any(item["source"] == source and item["status"] in {"refreshed", "partial"} for item in results) else "failed"),
                     "results": [item for item in results if item["source"] == source],
                 }
                 for source in ("jira", "testops")
@@ -800,6 +827,21 @@ def refresh_release(release_id: int, user: User = Depends(get_current_user), db:
             "kanban": kanban_result,
             "lock_scope": "process_local_single_backend_process_only",
         }
+        setting_key = f"release_refresh_result_{release_id}"
+        setting = db.get(AppSetting, setting_key)
+        if setting is None:
+            setting = AppSetting(key=setting_key, value_json={})
+            db.add(setting)
+        setting.value_json = jsonable_encoder(response)
+        db.commit()
+        return response
     finally:
         executor.shutdown(wait=False, cancel_futures=True)
-        lock.release()
+        unfinished = [f for f in locals().get("futures", {}) if not f.done()]
+        if unfinished:
+            def release_after_workers():
+                wait(unfinished)
+                lock.release()
+            threading.Thread(target=release_after_workers, daemon=True).start()
+        else:
+            lock.release()

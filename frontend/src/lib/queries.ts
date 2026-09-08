@@ -894,7 +894,7 @@ export function useReleaseOverview(id: number | null, targetStatus?: ReleaseStat
   });
 }
 
-export function useReleaseTab<T = unknown>(id: number | null, tab: "tasks" | "qa" | "questions" | "history" | "time-management/summary" | "time-management/tasks" | "time-management/worklogs", params: Record<string, unknown> = {}, enabled = true) {
+export function useReleaseTab<T = unknown>(id: number | null, tab: "tasks" | "qa" | "qa/results" | "questions" | "history" | "time-management/summary" | "time-management/tasks" | "time-management/worklogs", params: Record<string, unknown> = {}, enabled = true) {
   return useQuery({
     queryKey: ["release-tab", id, tab, params] as const,
     queryFn: () => api.get<T>(`/releases/${id}/${tab}`, { query: params }),
@@ -932,7 +932,7 @@ export function useUpdateRelease(id: number) {
 export function useTransitionRelease(id: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: { target_status: ReleaseStatus; release_note?: string | null }) => api.post<{ release: ApiRelease; assessment: ApiReleaseAssessment }>(`/releases/${id}/status-transitions`, body),
+    mutationFn: (body: { target_status: ReleaseStatus; release_note?: string | null; accept_risks?: boolean; risk_fingerprint?: string }) => api.post<{ release: ApiRelease; assessment: ApiReleaseAssessment }>(`/releases/${id}/status-transitions`, body),
     onSuccess: () => invalidateReleaseQueries(qc, id),
   });
 }
@@ -973,7 +973,7 @@ export function useDeleteRelease(id: number) {
 export function useRefreshRelease(id: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api.post<{ outcome: string; results: Array<Record<string, unknown>> }>(`/releases/${id}/refresh`),
+    mutationFn: () => api.post<import("./types").ReleaseRefreshResult>(`/releases/${id}/refresh`),
     onSuccess: () => invalidateReleaseQueries(qc, id),
   });
 }

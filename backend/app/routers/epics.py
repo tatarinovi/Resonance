@@ -378,15 +378,8 @@ def _test_run_read(run: EpicTestRun) -> EpicTestRunRead:
     }
     snapshot = run.testops_snapshot
     if snapshot:
-        payload["testops_snapshot"] = {
-            "status": snapshot.status, "total": snapshot.total, "passed": snapshot.passed,
-            "failed": snapshot.failed, "broken": snapshot.broken, "blocked": snapshot.blocked,
-            "in_progress": snapshot.in_progress, "synced_at": snapshot.synced_at,
-            "problem_cases": [{
-                "id": case.id, "title": case.case_name, "status": case.status,
-                "comment": case.safe_comment, "url": case.external_url, "defect_key": case.defect_key,
-            } for case in snapshot.problem_cases],
-        }
+        from ..epic_testops_service import snapshot_read
+        payload["testops_snapshot"] = snapshot_read(snapshot, snapshot.problem_cases)
     return EpicTestRunRead.model_validate(payload)
 
 

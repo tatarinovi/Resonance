@@ -514,6 +514,9 @@ class EpicBlockerUpdate(BaseModel):
 
 
 class EpicTestOpsProblemCaseRead(BaseModel):
+    external_result_id: str | None = None
+    parameters: dict | None = None
+    link_kind: str = "launch"
     id: int
     title: str
     status: str
@@ -690,6 +693,26 @@ class ReleaseEpicSummary(BaseModel):
     freshness: dict[str, Any] = Field(default_factory=dict)
 
 
+class ReleaseSourceDetailRead(BaseModel):
+    status: str
+    has_data: bool
+    label: str
+    epic_id: int | None = None
+    run_id: int | None = None
+    last_success_at: ApiDatetime | None = None
+    last_attempt_at: ApiDatetime | None = None
+    message: str | None = None
+
+
+class ReleaseSourceRead(BaseModel):
+    status: str
+    has_data: bool
+    covered: int
+    total: int
+    last_success_at: ApiDatetime | None = None
+    details: list[ReleaseSourceDetailRead] = Field(default_factory=list)
+
+
 class ReleaseRead(BaseModel):
     id: int
     key: str
@@ -713,7 +736,8 @@ class ReleaseRead(BaseModel):
     open_questions_count: int = 0
     capabilities: ReleaseCapabilities
     epics: list[ReleaseEpicSummary] = Field(default_factory=list)
-    freshness: dict[str, Any] = Field(default_factory=dict)
+    last_refresh: dict[str, Any] | None = None
+    freshness: dict[str, ReleaseSourceRead] = Field(default_factory=dict)
 
 
 class ReleaseCreate(BaseModel):
@@ -734,6 +758,8 @@ class ReleaseUpdate(BaseModel):
 
 
 class ReleaseTransitionRequest(BaseModel):
+    accept_risks: bool = False
+    risk_fingerprint: str | None = None
     target_status: ReleaseStatusValue
     release_note: str | None = None
 

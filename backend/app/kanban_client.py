@@ -4,7 +4,7 @@ import sys
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
-from time import perf_counter
+from time import perf_counter, monotonic
 from typing import Any
 from urllib.parse import urlparse
 
@@ -75,6 +75,7 @@ def parse_kanban_reference(kanban_url: str) -> tuple[str, int]:
 @dataclass
 class KanbanClient:
     token: str
+    deadline: float | None = None
     _pooled_http: httpx.Client | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
@@ -162,16 +163,20 @@ class KanbanClient:
         params: list[tuple[str, str]] | None = None,
         json_body: Any | None = None,
     ) -> Any:
+        remaining = self.deadline - monotonic() if self.deadline is not None else settings.kanban_timeout_seconds
+        if remaining <= 0:
+            raise HTTPException(status_code=504, detail="Kanban refresh time budget exceeded")
+        request_timeout = min(settings.kanban_timeout_seconds, remaining)
         url = f"{self.base_url}{path}"
         started_at = perf_counter()
         _trace_request("Kanban API request started: %s %s", method, url)
         pooled = self._pooled_http
         try:
             if pooled is not None:
-                response = pooled.request(method, url, params=params, json=json_body)
+                response = pooled.request(method, url, params=params, json=json_body, timeout=request_timeout)
             else:
                 with httpx.Client(
-                    timeout=settings.kanban_timeout_seconds,
+                    timeout=request_timeout,
                     headers=self._auth_headers(),
                 ) as client:
                     response = client.request(

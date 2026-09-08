@@ -37,6 +37,7 @@ vi.mock("@/components/shared/UserAvatar", () => ({
 
 function renderHeader(status: RealtimeStatus, path = "/") {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  qc.setQueryData(["release", 42], {id:42,key:"REL-007"});
   return render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={[path]}>
@@ -84,7 +85,7 @@ describe("Header realtime status", () => {
     view.unmount();
     renderHeader("offline", "/releases/42");
     expect(screen.getByRole("link", { name: "Релизы" })).toHaveAttribute("href", "/releases");
-    expect(screen.getByText("Релиз #42")).toBeInTheDocument();
+    expect(screen.getByText("REL-007")).toBeInTheDocument();
   });
   it("renders the realtime indicator and actions from the avatar menu", async () => {
     const user = userEvent.setup();

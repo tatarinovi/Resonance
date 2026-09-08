@@ -5,6 +5,7 @@ from datetime import datetime
 import re
 import time
 from typing import Any
+from urllib.parse import urljoin, urlsplit
 
 import httpx
 from fastapi import HTTPException, status
@@ -117,11 +118,19 @@ def fetch_testops_run(
         if normalized in counts:
             counts[normalized] += 1
         if normalized in PROBLEM_STATUSES:
+            supplied_url = str(item.get("url") or "")
+            result_url = urljoin(connection.endpoint + "/", supplied_url)
+            direct = bool(supplied_url and urlsplit(result_url).scheme in {"http", "https"} and urlsplit(result_url).netloc == urlsplit(connection.endpoint).netloc)
+            raw_parameters = item.get("parameters")
+            parameters = {str(p.get("name"))[:100]: str(p.get("value"))[:500] for p in raw_parameters if isinstance(p, dict)} if isinstance(raw_parameters, list) else None
             cases.append({
+                "external_result_id": str(item["id"])[:128] if item.get("id") is not None else None,
+                "parameters": parameters,
+                "link_kind": "result" if direct else "launch",
                 "case_name": str(item.get("name") or item.get("fullName") or item.get("title") or "Test result")[:2000],
                 "status": normalized,
                 "safe_comment": str(item.get("message") or item.get("statusDetails") or "")[:2000] or None,
-                "external_url": f"{connection.endpoint}/launch/{launch_id}",
+                "external_url": result_url if direct else f"{connection.endpoint}/launch/{launch_id}",
                 "defect_key": str(item.get("defectKey") or "")[:128] or None,
             })
     launch_status = _status(launch.get("status") if isinstance(launch, dict) else None)
@@ -165,6 +174,8 @@ def replace_testops_snapshot(db: Session, run: EpicTestRun, data: dict) -> datet
     db.add(snapshot)
     db.flush()
     db.add_all(EpicTestOpsProblemCase(test_run_id=run.id, **case) for case in cases)
+    run.sync_attempt_at = synced_at
+    run.sync_error = None
     run.testops_launch_id = str(data["external_launch_id"])
     state = _state(db, run.epic_id)
     state.last_attempt_at = synced_at
@@ -193,3 +204,18 @@ def refresh_epic_testops(db: Session, epic: Epic) -> int:
         replace_testops_snapshot(db, run, data)
         refreshed += 1
     return refreshed
+
+
+def problem_case_read(case):
+    return {"id": case.id, "external_result_id": case.external_result_id,
+            "title": case.case_name, "status": case.status, "comment": case.safe_comment,
+            "url": case.external_url, "defect_key": case.defect_key,
+            "parameters": case.parameters, "link_kind": case.link_kind}
+
+
+def snapshot_read(snapshot, cases=None):
+    if snapshot is None:
+        return None
+    return {**{key: getattr(snapshot, key) for key in ('status', 'total', 'passed', 'failed', 'broken', 'blocked', 'in_progress', 'synced_at')},
+            'external_launch_id': snapshot.external_launch_id,
+            'problem_cases': [problem_case_read(case) for case in (cases or [])]}

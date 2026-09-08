@@ -2,6 +2,11 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+import hashlib
+import json
+from .release_classification import status_group, priority_group, latest_issues, issue_rank, GROUP_LABELS
+from .release_sources import release_sources
+from .epic_testops_service import snapshot_read
 from typing import Any, Iterable
 from urllib.parse import quote
 
@@ -39,11 +44,10 @@ OPEN_TICKET_STATUSES = {
     TicketStatus.PENDING_APPROVAL,
     TicketStatus.FORWARDED,
     TicketStatus.RETURNED,
-    TicketStatus.ANSWERED,
 }
 AUDIT_DETAIL_KEYS = {
     "fields", "old_status", "new_status", "epic_ids", "epic_id", "reason", "counts",
-    "outcome", "source", "result", "error_code", "message", "archived", "owner_user_id",
+    "accepted_risks", "risk_fingerprint", "outcome", "source", "result", "error_code", "message", "archived", "owner_user_id",
 }
 
 
@@ -87,7 +91,7 @@ def safe_audit_details(details: dict[str, Any] | None) -> dict[str, Any]:
         if isinstance(value, str):
             result[key] = value[:500]
         elif isinstance(value, list):
-            result[key] = value[:100]
+            result[key] = value if key == "accepted_risks" else value[:100]
         elif isinstance(value, dict):
             result[key] = {
                 str(nested_key)[:100]: nested_value if isinstance(nested_value, (int, float, bool, type(None))) else str(nested_value)[:200]
@@ -144,8 +148,8 @@ def _freshness(state: EpicExternalSyncState | None) -> dict[str, Any]:
             "error_code": state.last_error_code if state else None,
             "message": state.last_error_message if state else None,
         }
-    stale_before = datetime.utcnow() - timedelta(hours=get_settings().release_external_data_stale_hours)
-    status = "integration_failure" if state.last_error_code else ("stale" if state.last_success_at < stale_before else "fresh")
+    stale_before = datetime.utcnow() - timedelta(minutes=10)
+    status = "integration_failure" if state.last_error_code else ("stale" if state.last_success_at <= stale_before else "fresh")
     return {
         "status": status,
         "last_success_at": state.last_success_at,
@@ -188,11 +192,7 @@ def release_to_read(db: Session, release: Release, user: User, *, include_epics:
     assessment = build_release_assessment(db, release, states=states)
     epic_summaries = [_epic_summary(db, epic, states) for epic in epics] if include_epics else []
     open_questions = sum(_open_questions_count(db, epic.id) for epic in epics)
-    freshness = {
-        "jira": [summary.freshness["jira"] for summary in epic_summaries],
-        "testops": [summary.freshness["testops"] for summary in epic_summaries],
-        "kanban": kanban_freshness(db),
-    }
+    freshness = release_sources(db, release, epics)
     return ReleaseRead(
         id=release.id,
         key=release.key,
@@ -216,12 +216,14 @@ def release_to_read(db: Session, release: Release, user: User, *, include_epics:
         open_questions_count=open_questions,
         capabilities=capabilities(user, release),
         epics=epic_summaries,
+        last_refresh=(db.get(AppSetting, f"release_refresh_result_{release.id}").value_json if db.get(AppSetting, f"release_refresh_result_{release.id}") else None),
         freshness=freshness,
     )
 
 
 def _attention(kind: str, source: str, epic: Epic, message: str, *, severity: str = "warning", entity: dict | None = None, timestamp: datetime | None = None) -> dict:
     return {
+        "id": hashlib.sha256(f"{kind}:{epic.id}:{(entity or {}).get('run_id', '')}:{(entity or {}).get('id', (entity or {}).get('key', message))}".encode()).hexdigest()[:24],
         "kind": kind,
         "source": source,
         "severity": severity,
@@ -258,16 +260,17 @@ def build_release_assessment(
     jira_rows = db.scalars(select(EpicJiraIssue).where(EpicJiraIssue.epic_id.in_(epic_ids))).all() if epic_ids else []
     epic_by_id = {epic.id: epic for epic in epics}
     seen_jira: set[str] = set()
-    for issue in jira_rows:
-        priority = (issue.priority or "").casefold()
-        severity = "blocker" if priority in blocker_priorities else ("critical" if priority in critical_priorities else None)
+    jira_unique = latest_issues(jira_rows)
+    for issue in jira_unique.values():
+        priority = priority_group(issue.priority)
+        severity = priority if priority in {"blocker", "critical"} and status_group(issue.status, issue.status_category) != "done" else None
         if severity and issue.jira_issue_key not in seen_jira:
             seen_jira.add(issue.jira_issue_key)
             epic = epic_by_id[issue.epic_id]
             actual.append(_attention(
                 f"jira_{severity}", "jira", epic, f"{issue.jira_issue_key}: {issue.summary}",
                 severity=severity,
-                entity={"key": issue.jira_issue_key, "title": issue.summary, "url": issue.browser_url},
+                entity={"key": issue.jira_issue_key, "title": issue.summary, "url": issue.browser_url, "status": issue.status},
                 timestamp=issue.refreshed_at,
             ))
 
@@ -278,21 +281,21 @@ def build_release_assessment(
         .join(EpicTestRun, EpicTestRun.id == EpicTestOpsSnapshot.test_run_id)
         .where(EpicTestRun.epic_id.in_(epic_ids))
     ).all() if epic_ids else []
-    run_epic = {run.id: epic for epic in epics for run in epic.test_runs or []}
+    run_epic = {run.id: epic for epic in epics for run in epic.test_runs or [] if run.environment == (epic.qa_block.active_test_stage if epic.qa_block else "test")}
     for case in testops_cases:
         if case.status.lower() in {"failed", "broken", "blocked"} and case.test_run_id in run_epic:
             actual.append(_attention(
                 f"testops_{case.status.lower()}", "testops", run_epic[case.test_run_id], case.case_name,
-                severity="blocker", entity={"title": case.case_name, "url": case.external_url},
+                severity="critical", entity={"id": case.external_result_id or case.id, "title": case.case_name, "url": case.external_url, "status": case.status, "run_id": case.test_run_id, "link_kind": case.link_kind},
             ))
 
     for epic in epics:
         for blocker in epic.blockers or []:
             if blocker.resolved_at is None:
-                actual.append(_attention("local_blocker", "resonance", epic, blocker.body, severity="blocker", timestamp=blocker.created_at))
+                actual.append(_attention("local_blocker", "resonance", epic, blocker.body, severity="blocker", entity={"id": blocker.id}, timestamp=blocker.created_at))
         for run in epic.test_runs or []:
-            if str(run.status).lower() == TestRunStatus.FAILED.value:
-                actual.append(_attention("qa_failed", "qa", epic, f"{str(run.environment).upper()} run failed", severity="blocker", timestamp=run.finished_at or run.created_at))
+            if run.id in run_epic and str(run.status).lower() == TestRunStatus.FAILED.value:
+                actual.append(_attention("qa_failed", "qa", epic, f"Ран {str(run.environment).upper()} завершён с ошибкой", severity="critical", timestamp=run.finished_at or run.created_at))
 
         tickets = db.scalars(select(Ticket).where(Ticket.epic_id == epic.id)).all()
         for ticket in tickets:
@@ -308,36 +311,31 @@ def build_release_assessment(
             qa_complete = _qa_status(epic) in {EpicQAStatus.PROD_COMPLETE.value, EpicQAStatus.CLOSED.value}
             incompleteness: list[str] = []
             if not qa_complete:
-                incompleteness.append("QA lifecycle не завершён до PROD")
+                incompleteness.append("QA-процесс не завершён до PROD")
             if prod is None:
-                incompleteness.append("Нет PROD run")
+                incompleteness.append("Не подключён PROD-ран")
             elif str(prod.status).lower() != TestRunStatus.PASSED.value:
-                incompleteness.append("PROD run не пройден")
+                incompleteness.append("PROD-ран не пройден")
             for message in incompleteness:
                 item = _attention("qa_incomplete", "qa", epic, message, severity="critical" if strict_qa else "warning")
                 (actual if strict_qa else warnings).append(item)
 
-        jira_state = states.get((epic.id, "jira"))
-        testops_state = states.get((epic.id, "testops"))
-        has_jira_coverage = bool(jira_state and jira_state.last_success_at)
-        linked_testops = [run for run in runs if run.testops_launch_id]
-        has_run_coverage = bool(runs) and (not linked_testops or bool(testops_state and testops_state.last_success_at))
-        if not has_jira_coverage and not has_run_coverage:
-            gaps.append(_attention("data_unavailable", "release", epic, "Недостаточно Jira/QA данных", severity="info"))
-        if not (epic.jira_jql or "").strip():
-            warnings.append(_attention("source_not_configured", "jira", epic, "Jira не настроена для Epic", severity="info"))
-        if not runs:
-            warnings.append(_attention("source_not_configured", "testops", epic, "Нет TestOps run", severity="info"))
-        for source, state in (("jira", jira_state), ("testops", testops_state)):
-            fresh = _freshness(state)
-            if fresh["status"] in {"stale", "integration_failure"}:
-                warnings.append(_attention(fresh["status"], source, epic, fresh.get("message") or f"Данные {source} требуют обновления", severity="warning", timestamp=fresh.get("last_success_at")))
+    sources = release_sources(db, release, epics)
+    for source in ('jira', 'testops'):
+        for detail in sources[source]['details']:
+            epic = epic_by_id[detail['epic_id']]
+            entity = {'id': detail.get('run_id') or source, 'run_id': detail.get('run_id')}
+            if not detail['has_data']:
+                gaps.append(_attention('source_not_configured' if detail['status'] == 'not_configured' else 'data_unavailable', source, epic,
+                    f"{detail['label']}: {'источник не подключён' if detail['status'] == 'not_configured' else 'успешные данные ещё не загружены'}", severity='info', entity=entity))
+            if detail['status'] in {'failed', 'error', 'stale'}:
+                warnings.append(_attention('integration_failure' if detail['status'] != 'stale' else 'stale', source, epic,
+                    f"{detail['label']}: {'ошибка обновления' if detail['status'] != 'stale' else 'данные устарели'}", entity=entity, timestamp=detail['last_success_at']))
 
     readiness = "has_risks" if actual else ("no_data" if not epics or gaps else "ready")
     counts: dict[str, int] = {}
     for item in actual:
         counts[item["kind"]] = counts.get(item["kind"], 0) + 1
-    jira_unique = {row.jira_issue_key: row for row in jira_rows}
     jira_by_status: dict[str, int] = {}
     jira_by_priority: dict[str, int] = {}
     jira_by_type: dict[str, int] = {}
@@ -360,16 +358,16 @@ def build_release_assessment(
             "environment": active_stage,
             "run": None if run is None else {
                 "id": run.id, "status": run.status, "url": run.url,
-                "snapshot": None if snapshot is None else {
-                    "status": snapshot.status, "total": snapshot.total, "passed": snapshot.passed,
-                    "failed": snapshot.failed, "broken": snapshot.broken, "blocked": snapshot.blocked,
-                    "in_progress": snapshot.in_progress, "synced_at": snapshot.synced_at,
-                },
+                "testops_launch_id": run.testops_launch_id,
+                "snapshot": snapshot_read(snapshot),
             },
         })
     qa_counts["completed"] = qa_counts["passed"] + qa_counts["failed"] + qa_counts["broken"] + qa_counts["blocked"]
     qa_counts["progress_percent"] = round(qa_counts["completed"] / qa_counts["total"] * 100) if qa_counts["total"] else 0
 
+    qa_counts["remaining"] = max(0, qa_counts["total"] - qa_counts["completed"])
+    qa_counts["covered"] = sum(1 for item in current_runs if item["run"] and item["run"]["snapshot"])
+    qa_counts["epic_count"] = len(epics)
     tickets = db.scalars(select(Ticket).where(Ticket.epic_id.in_(epic_ids))).all() if epic_ids else []
     open_tickets = [ticket for ticket in tickets if ticket.status in OPEN_TICKET_STATUSES]
     overdue_questions = sum(1 for ticket in open_tickets if ticket.due_at and ticket.due_at < now)
@@ -379,6 +377,7 @@ def build_release_assessment(
     jira_search_url = f"{jira_base}/issues/?jql={quote('issuekey in (' + ','.join(issue_keys) + ')')}" if jira_base and issue_keys else None
 
     return {
+        "risk_fingerprint": hashlib.sha256(json.dumps(sorted((item["id"], item["message"], item["severity"]) for item in actual), ensure_ascii=False).encode()).hexdigest(),
         "readiness": readiness,
         "actual_risks": actual,
         "warnings": warnings,
@@ -391,11 +390,11 @@ def build_release_assessment(
             "local_blockers": sum(1 for epic in epics for blocker in epic.blockers or [] if blocker.resolved_at is None),
             "risk_counts": counts,
             "qa": qa_counts,
-            "jira": {"total": len(jira_unique), "by_status": jira_by_status, "by_priority": jira_by_priority, "by_type": jira_by_type},
+            "jira": {"total": len(jira_unique), "by_status": jira_by_status, "by_priority": jira_by_priority, "by_type": jira_by_type, "groups": [{"id": group, "label": label, "count": sum(status_group(i.status, i.status_category) == group for i in jira_unique.values())} for group, label in GROUP_LABELS.items()], "open_blockers": counts.get("jira_blocker", 0), "open_critical": counts.get("jira_critical", 0)},
             "questions": {"open": len(open_tickets), "overdue": overdue_questions, "waiting_expert": waiting_expert},
         },
         "current_test_runs": current_runs,
-        "key_jira_tasks": [{"key": row.jira_issue_key, "title": row.summary, "status": row.status, "priority": row.priority, "url": row.browser_url} for row in list(jira_unique.values())[:8]],
+        "key_jira_tasks": [{"key": row.jira_issue_key, "title": row.summary, "status": row.status, "priority": row.priority, "url": row.browser_url} for row in sorted((i for i in jira_unique.values() if status_group(i.status, i.status_category) != "done"), key=issue_rank)[:5]],
         "key_questions": [{"id": row.id, "key": f"Q-{row.id:03d}", "title": row.title or row.description, "status": row.status.value, "overdue": bool(row.due_at and row.due_at < now), "url": f"/questions/Q-{row.id:03d}"} for row in open_tickets[:8]],
         "jira_search_url": jira_search_url,
     }
@@ -410,5 +409,5 @@ def kanban_freshness(db: Session) -> dict[str, Any]:
         parsed = datetime.fromisoformat(str(updated_at).replace("Z", "+00:00")).replace(tzinfo=None)
     except ValueError:
         return {"status": "data_unavailable", "updated_at": updated_at}
-    stale = parsed < datetime.utcnow() - timedelta(hours=get_settings().release_external_data_stale_hours)
+    stale = parsed < datetime.utcnow() - timedelta(minutes=10)
     return {"status": "stale" if stale else "fresh", "updated_at": updated_at}

@@ -87,6 +87,7 @@ def fetch_jira_issues(
             "jira_issue_key": key,
             "summary": str(fields.get("summary") or ""),
             "status": str(issue_status.get("name") or "Unknown"),
+            "status_category": str((issue_status.get("statusCategory") or {}).get("key") or "") or None,
             "priority": str(priority.get("name") or "") or None,
             "assignee_display_name": str(assignee.get("displayName") or "") or None,
             "issue_type": str(issue_type.get("name") or "") or None,

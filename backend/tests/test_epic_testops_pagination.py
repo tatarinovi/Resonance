@@ -49,3 +49,24 @@ def test_fetch_testops_reads_every_result_page(monkeypatch):
     assert result["total"] == 251
     assert result["passed"] == 251
     assert Client.pages == [0, 1]
+
+
+def test_result_identity_parameters_and_link_kind(monkeypatch):
+    class ResultClient(Client):
+        def get(self, url, *, params=None, timeout=None):
+            if '/launch/' in url:
+                return Response({'status':'running'})
+            return Response({'content':[
+                {'id':10,'name':'same','status':'failed','url':'/testresult/10','parameters':[{'name':'browser','value':'Firefox'}],'defectKey':'BUG-1','message':'failure'},
+                {'id':11,'name':'same','status':'failed'},
+            ]})
+    monkeypatch.setattr(service,'get_connection',lambda *_:SimpleNamespace(endpoint='https://testops.local'))
+    monkeypatch.setattr(service,'decrypt_secret',lambda *_:'test')
+    monkeypatch.setattr(service.httpx,'Client',ResultClient)
+    result=service.fetch_testops_run(object(),EpicTestRun(epic_id=1,environment='test',testops_launch_id='42'))
+    first,second=result['problem_cases']
+    assert (first['external_result_id'],second['external_result_id'])==('10','11')
+    assert first['parameters']=={'browser':'Firefox'}
+    assert first['link_kind']=='result' and first['external_url']=='https://testops.local/testresult/10'
+    assert second['link_kind']=='launch' and second['external_url'].endswith('/launch/42')
+    assert first['defect_key']=='BUG-1' and first['safe_comment']=='failure'

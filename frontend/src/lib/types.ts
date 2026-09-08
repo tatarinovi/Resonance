@@ -6,7 +6,12 @@
  * sensible defaults in the mappers.
  */
 
-export type BackendUserRole = "admin" | "coordinator" | "manager" | "expert" | "employee";
+export type BackendUserRole =
+  | "admin"
+  | "coordinator"
+  | "manager"
+  | "expert"
+  | "employee";
 
 export interface ApiUser {
   id: number;
@@ -25,7 +30,11 @@ export interface ApiUser {
   last_login_at?: string | null;
 }
 
-export type PersonalChannelMode = "in_app_only" | "matrix_preferred" | "telegram_preferred" | "both";
+export type PersonalChannelMode =
+  | "in_app_only"
+  | "matrix_preferred"
+  | "telegram_preferred"
+  | "both";
 
 export interface ApiMe extends ApiUser {
   personal_channel_mode?: PersonalChannelMode;
@@ -190,7 +199,12 @@ export type EpicQAStatus =
   | "prod_complete"
   | "closed";
 export type EpicTestStage = "test" | "stage" | "prod";
-export type TestRunStatus = "planned" | "running" | "passed" | "failed" | "skipped";
+export type TestRunStatus =
+  | "planned"
+  | "running"
+  | "passed"
+  | "failed"
+  | "skipped";
 
 export interface ApiEpicTestPlanItem {
   id: string;
@@ -266,12 +280,27 @@ export interface ApiEpicTestRun {
 }
 
 export interface ApiEpicTestOpsProblemCase {
-  id: number; title: string; status: string; comment: string | null; url: string | null; defect_key: string | null;
+  external_result_id?: string | null;
+  parameters?: Record<string, string> | null;
+  link_kind?: "launch" | "result";
+  id: number;
+  title: string;
+  status: string;
+  comment: string | null;
+  url: string | null;
+  defect_key: string | null;
 }
 
 export interface ApiEpicTestOpsSnapshot {
-  status: string; total: number; passed: number; failed: number; broken: number; blocked: number;
-  in_progress: number; synced_at: string; problem_cases: ApiEpicTestOpsProblemCase[];
+  status: string;
+  total: number;
+  passed: number;
+  failed: number;
+  broken: number;
+  blocked: number;
+  in_progress: number;
+  synced_at: string;
+  problem_cases: ApiEpicTestOpsProblemCase[];
 }
 
 export interface ApiEpic {
@@ -305,12 +334,22 @@ export interface ApiEpic {
   history: ApiEpicAudit[];
   blockers: ApiEpicBlocker[];
   test_runs: ApiEpicTestRun[];
-  active_release?: { id: number; key: string; title: string; status: "draft" | "in_progress" | "ready" } | null;
+  active_release?: {
+    id: number;
+    key: string;
+    title: string;
+    status: "draft" | "in_progress" | "ready";
+  } | null;
 }
 
 export type ApiEpicPage = ApiPage<ApiEpic>;
 
-export type ReleaseStatus = "draft" | "in_progress" | "ready" | "released" | "cancelled";
+export type ReleaseStatus =
+  | "draft"
+  | "in_progress"
+  | "ready"
+  | "released"
+  | "cancelled";
 
 export interface ApiReleaseCapabilities {
   can_edit_release: boolean;
@@ -336,6 +375,7 @@ export interface ApiReleaseEpicSummary {
 }
 
 export interface ApiRelease {
+  last_refresh?: ReleaseRefreshResult | null;
   id: number;
   key: string;
   project_id: number;
@@ -358,22 +398,32 @@ export interface ApiRelease {
   open_questions_count: number;
   capabilities: ApiReleaseCapabilities;
   epics: ApiReleaseEpicSummary[];
-  freshness: Record<string, unknown>;
+  freshness: Record<string, ReleaseSource>;
 }
 
 export type ApiReleasePage = ApiPage<ApiRelease>;
 
 export interface ApiReleaseAttention {
+  id: string;
   kind: string;
   source: string;
   severity: string;
   epic: { id: number; key: string; title: string };
-  entity?: { key?: string; title?: string; url?: string } | null;
+  entity?: {
+    id?: string | number;
+    key?: string;
+    title?: string;
+    url?: string;
+    status?: string;
+    run_id?: number;
+    link_kind?: string;
+  } | null;
   message: string;
   timestamp?: string | null;
 }
 
 export interface ApiReleaseAssessment {
+  risk_fingerprint: string;
   readiness: "has_risks" | "no_data" | "ready";
   actual_risks: ApiReleaseAttention[];
   warnings: ApiReleaseAttention[];
@@ -381,13 +431,65 @@ export interface ApiReleaseAssessment {
   attention: ApiReleaseAttention[];
   summary: Record<string, unknown> & {
     risk_counts: Record<string, number>;
-    qa?: { total: number; passed: number; failed: number; broken: number; blocked: number; in_progress: number; completed: number; progress_percent: number };
-    jira?: { total: number; by_status: Record<string, number>; by_priority: Record<string, number>; by_type: Record<string, number> };
+    qa?: {
+      total: number;
+      passed: number;
+      failed: number;
+      broken: number;
+      blocked: number;
+      in_progress: number;
+      completed: number;
+      progress_percent: number;
+      remaining: number;
+      covered: number;
+      epic_count: number;
+    };
+    jira?: {
+      groups: Array<{ id: string; label: string; count: number }>;
+      open_blockers: number;
+      open_critical: number;
+      total: number;
+      by_status: Record<string, number>;
+      by_priority: Record<string, number>;
+      by_type: Record<string, number>;
+    };
     questions?: { open: number; overdue: number; waiting_expert: number };
   };
-  current_test_runs?: Array<{ epic: { id: number; key: string; title: string }; environment: string; run: null | { id: number; status: string; url: string | null; snapshot: null | { status: string; total: number; passed: number; failed: number; broken: number; blocked: number; in_progress: number; synced_at: string } } }>;
-  key_jira_tasks?: Array<{ key: string; title: string; status: string; priority: string | null; url: string }>;
-  key_questions?: Array<{ id: number; key: string; title: string; status: string; overdue: boolean; url: string }>;
+  current_test_runs?: Array<{
+    epic: { id: number; key: string; title: string };
+    environment: string;
+    run: null | {
+      id: number;
+      testops_launch_id?: string;
+      status: string;
+      url: string | null;
+      snapshot: null | {
+        status: string;
+        total: number;
+        passed: number;
+        failed: number;
+        broken: number;
+        blocked: number;
+        in_progress: number;
+        synced_at: string;
+      };
+    };
+  }>;
+  key_jira_tasks?: Array<{
+    key: string;
+    title: string;
+    status: string;
+    priority: string | null;
+    url: string;
+  }>;
+  key_questions?: Array<{
+    id: number;
+    key: string;
+    title: string;
+    status: string;
+    overdue: boolean;
+    url: string;
+  }>;
   jira_search_url?: string | null;
 }
 
@@ -459,7 +561,12 @@ export interface ApiDashboardAggregate {
   };
   status_counts: Record<string, number>;
   role_counts: Record<string, number>;
-  stale_questions: { id: number; title: string; updated_at: string; hours_stale: number }[];
+  stale_questions: {
+    id: number;
+    title: string;
+    updated_at: string;
+    hours_stale: number;
+  }[];
 }
 
 export interface ApiProfileStats {
@@ -485,4 +592,41 @@ export interface ApiStatisticsSummary {
   epic_qa_status_counts: Record<string, number>;
   epic_status_counts: Record<string, number>;
   test_coverage: { total: number; done: number; pct: number | null };
+}
+
+export interface ReleaseSourceDetail {
+  status: string;
+  has_data: boolean;
+  label: string;
+  epic_id?: number;
+  run_id?: number;
+  last_success_at: string | null;
+  last_attempt_at: string | null;
+  message?: string | null;
+}
+export interface ReleaseSource {
+  status: string;
+  has_data: boolean;
+  covered: number;
+  total: number;
+  last_success_at: string | null;
+  details: ReleaseSourceDetail[];
+}
+
+export interface ReleaseRefreshOperation {
+  epic_id: number;
+  source: string;
+  status: string;
+  current_success_at?: string | null;
+  runs?: Array<{
+    run_id: number;
+    status: string;
+    current_success_at?: string | null;
+  }>;
+}
+export interface ReleaseRefreshResult {
+  outcome: string;
+  results: ReleaseRefreshOperation[];
+  kanban: { status: string };
+  finished_at?: string;
 }

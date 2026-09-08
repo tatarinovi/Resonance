@@ -1,3 +1,4 @@
+import { useRelease } from "@/lib/queries";
 import { useEffect, useState } from "react";
 import { useLocation as useWouterLocation, Link } from "@/lib/router";
 import { useLocation as useRouterLocation } from "react-router-dom";
@@ -41,6 +42,8 @@ const routeLabels: Record<string, string> = {
 function Breadcrumb() {
   const [location] = useWouterLocation();
   const routerLoc = useRouterLocation();
+  const releaseId = /^\/releases\/(\d+)$/.exec(location)?.[1];
+  const release = useRelease(releaseId ? Number(releaseId) : null);
 
   if (location === "/admin/kanban/projects") {
     return <span className="truncate text-sm font-medium text-foreground">Kanban проекты</span>;
@@ -106,7 +109,7 @@ function Breadcrumb() {
       <div className="flex min-w-0 items-center gap-1 text-sm">
         <Link href="/releases" className="text-muted-foreground hover:text-foreground">Релизы</Link>
         <ChevronRight size={14} className="shrink-0 text-muted-foreground/50" />
-        <span className="truncate font-medium text-foreground">Релиз #{id}</span>
+        <span className="truncate font-medium text-foreground">{release.data?.key ?? "Релиз"}</span>
       </div>
     );
   }
