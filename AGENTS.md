@@ -34,7 +34,7 @@ backend/
     realtime.py              process-local SSE event bus
     kanban_client.py         external Kanban HTTP client and normalization
     storage.py               S3/MinIO access
-  migrations/versions/       linear Alembic history; current head is 0019
+  migrations/versions/       linear Alembic history; current head is 0020
   tests/                     pytest API/unit coverage
   docs/                      notification and Kanban implementation notes
 frontend/
@@ -262,9 +262,9 @@ There are three related paths:
 
 1. `kanban_client.py` is the HTTP adapter and normalization boundary.
 2. `routers/kanban.py` exposes live project/task operations and a cached project bundle for the board UI.
-3. `routers/analytics.py` serves an application-level snapshot for analytics/release screens; snapshot refresh is explicit and scheduled daily.
+3. `routers/analytics.py` serves scoped analytics snapshots keyed by screen, access, filters, and pagination. Successful snapshots younger than 10 minutes are reused; stale/empty scopes refresh with duplicate-run protection. Manual refresh bypasses TTL. Release time data uses its own `release_overview` scope keyed by release and current Epic Kanban references.
 
-Kanban credentials are global and administrator-managed through `GET/PATCH/POST/DELETE /api/integrations`; Jira and TestOps currently support setup and connection checks only. Epic Jira tasks are a separate, simple cache: project members read `GET /api/epics/{id}/jira-issues`; coordinators/admins run `POST /api/epics/{id}/jira-issues/refresh` from the epic JQL. There is no Epic sync worker, scheduler or release-analytics dashboard. The migration seeds exactly one row for each supported type. Never lazily create one or fall back to `User.kanban_token`; the legacy per-user poll is disabled. External payloads are inconsistent, so keep normalization centralized and defensive. Preserve request timeout diagnostics and avoid exposing tokens in errors/logs.
+Kanban credentials are global and administrator-managed through `GET/PATCH/POST/DELETE /api/integrations`; Jira and TestOps support setup, connection checks, Epic-owned cached data, and explicit Release refresh. Epic Jira tasks are a separate, simple cache: project members read `GET /api/epics/{id}/jira-issues`; coordinators/admins run `POST /api/epics/{id}/jira-issues/refresh` from the epic JQL. Release detail aggregates only member Epics. `release_classification.py` owns Jira status groups and priority normalization; terminal issues remain in tasks but do not contribute to risks. Shared issues use their newest cached version and retain all Epic memberships. The migration seeds exactly one row for each supported type. Never lazily create one or fall back to `User.kanban_token`; the legacy per-user poll is disabled. External payloads are inconsistent, so keep normalization centralized and defensive. Preserve request timeout diagnostics and avoid exposing tokens in errors/logs.
 
 ### Attachment delivery
 
@@ -272,7 +272,7 @@ Uploads reject HTML/XHTML and SVG by MIME type and extension. New S3 objects use
 
 ### Database changes
 
-Never use `Base.metadata.create_all()` as a schema-change mechanism. Add a new linear Alembic revision after `0019_scoped_release`, update ORM and Pydantic/frontend DTOs together, and run `tests/test_alembic.py`. Migrations must work for both empty databases and upgrades from the previous head. `bootstrap.py` contains deliberate compatibility logic for databases that predate Alembic; do not remove it casually.
+Never use `Base.metadata.create_all()` as a schema-change mechanism. Add a new linear Alembic revision after `0020_release_insights`, update ORM and Pydantic/frontend DTOs together, and run `tests/test_alembic.py`. Migrations must work for both empty databases and upgrades from the previous head. `bootstrap.py` contains deliberate compatibility logic for databases that predate Alembic; do not remove it casually.
 
 ## Frontend design
 
@@ -368,3 +368,14 @@ Before handoff:
 - SQLite test behavior is useful but not identical to PostgreSQL; migration and SQL-sensitive changes deserve PostgreSQL/local-compose verification.
 - The ignored root `.env` may contain real secrets. Inspect keys only unless values are strictly required and authorized.
 - `README.md` is product-facing and may lag implementation details; resolve discrepancies in favor of code, migrations, CI, and `deploy/`, then update docs if the task includes it.
+
+
+## Release detail contracts (0020)
+
+- Release Jira tasks expose `status_group`, `is_done`, normalized `priority_group`, and `source_epics`. Filters and server sorting precede pagination (`items/total/page/page_size`). The five groups are todo/development/review/blocked/done; unmapped statuses remain unknown. Jira category `done` is authoritative, with exact legacy labels when category is absent.
+- Overview QA counts only each Epic's active environment. Completed is passed + failed + broken + blocked; remaining is total minus completed. A failed result is a test risk, not automatically blocker severity. QA exposes other environments and paginated `/api/releases/{id}/qa/results` with result IDs, parameters, defect/comment, and explicit result-versus-launch link kinds.
+- `release_sources.py` supplies typed per-source coverage with Epic/run details and a 10-minute TTL. Per-run TestOps attempt/error fields prevent a successful sibling run from hiding a failure. Previous successful snapshots remain visible after errors.
+- Release refresh retains its process lock until unfinished workers finish. Jira/TestOps and scoped Kanban share the wall-clock budget; Kanban fetches worklogs only for tasks belonging to linked Epics. Source outcomes are success/partial/failed/skipped; operation details and the last result persist in AppSetting `release_refresh_result_{id}`.
+- Ready/released transitions re-evaluate risks on the server. Actual risks require `accept_risks=true` and the current assessment `risk_fingerprint`; changed risks return 409. Accepted risk composition is stored in audit history. Role, transition, and historical-membership rules remain server-enforced.
+- Release components live in `frontend/src/components/releases/`; tabs, filters, sort, and pagination use URL search parameters. Release breadcrumbs use the backend global key, never the numeric route ID. Desktop light/dark use existing theme tokens.
+- Focused regression coverage: `test_release_insights.py`, `test_epic_testops_pagination.py`, `test_alembic.py`, and frontend `releaseInsights.test.tsx`.
