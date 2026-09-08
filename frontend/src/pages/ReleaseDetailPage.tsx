@@ -207,7 +207,7 @@ function Composition({ release: r }: { release: ApiRelease }) {
                 {e.key} · {e.title}
               </Link>
               <p className="text-sm text-muted-foreground">
-                QA: {label(e.qa_status)} · {e.blockers_count} локальных блокеров
+                QA: {label(e.qa_status)} · Среда: {e.active_test_stage?.toUpperCase() ?? "не задана"} · {e.risk_count ?? e.blockers_count} рисков
               </p>
             </div>
             {r.capabilities.can_manage_epics && (

@@ -371,6 +371,8 @@ export interface ApiReleaseEpicSummary {
   jira_tasks_count: number;
   open_questions_count: number;
   blockers_count: number;
+  risk_count?: number;
+  active_test_stage?: string | null;
   freshness: Record<string, unknown>;
 }
 

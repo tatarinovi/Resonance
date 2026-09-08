@@ -175,6 +175,7 @@ def _epic_summary(db: Session, epic: Epic, states: dict[tuple[int, str], EpicExt
         title=epic.title,
         status=epic.status.value if hasattr(epic.status, "value") else str(epic.status).lower(),
         qa_status=_qa_status(epic),
+        active_test_stage=epic.qa_block.active_test_stage if epic.qa_block else None,
         project_id=epic.project_id,
         jira_tasks_count=jira_count,
         open_questions_count=_open_questions_count(db, epic.id),
@@ -191,6 +192,8 @@ def release_to_read(db: Session, release: Release, user: User, *, include_epics:
     states = _sync_states(db, [epic.id for epic in epics])
     assessment = build_release_assessment(db, release, states=states)
     epic_summaries = [_epic_summary(db, epic, states) for epic in epics] if include_epics else []
+    for summary in epic_summaries:
+        summary.risk_count = sum(item["epic"]["id"] == summary.id for item in assessment["actual_risks"])
     open_questions = sum(_open_questions_count(db, epic.id) for epic in epics)
     freshness = release_sources(db, release, epics)
     return ReleaseRead(

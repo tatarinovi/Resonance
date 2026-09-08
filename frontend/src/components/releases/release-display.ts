@@ -47,5 +47,10 @@ export const labels: Record<string, string> = {
 };
 export const label = (s?: string | null) =>
   s ? (labels[s.toLowerCase()] ?? s) : "—";
-export const date = (s?: string | null) => (s ? formatDateTime(s) : "—");
+// Legacy cached endpoints return UTC timestamps without an explicit offset.
+export const date = (s?: string | null) => {
+  if (!s) return "—";
+  const instant = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(s) ? `${s}Z` : s;
+  return formatDateTime(instant);
+};
 export const panel = "rounded-xl border border-border bg-card p-5";

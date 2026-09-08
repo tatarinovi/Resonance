@@ -582,8 +582,7 @@ export function ReleaseQa({ release: r }: { release: ApiRelease }) {
                 <span className="text-destructive">{label(c.status)}</span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                {c.epic_key} · {c.environment.toUpperCase()} · Результат{" "}
-                {c.external_result_id ?? c.id}
+                {c.epic_key} · {c.environment.toUpperCase()} · {c.external_result_id ? `Результат TestOps ${c.external_result_id}` : `Запись кэша ${c.id} · ID TestOps ещё не загружен`}
               </p>
               {c.parameters && (
                 <p className="mt-1">

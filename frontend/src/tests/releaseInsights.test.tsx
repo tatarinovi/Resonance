@@ -104,3 +104,10 @@ describe("Release insight navigation", () => {
     expect(screen.getByText(/Данные: 1\/2/)).toBeInTheDocument();
   });
 });
+
+
+it("displays legacy UTC timestamps consistently with typed timestamps", async () => {
+  const { date } = await import("@/components/releases/release-display");
+  expect(date("2026-09-08T11:47:00")).toBe(date("2026-09-08T11:47:00Z"));
+  expect(date("2026-09-08T14:47:00+03:00")).toBe(date("2026-09-08T11:47:00Z"));
+});

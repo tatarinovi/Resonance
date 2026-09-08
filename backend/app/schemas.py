@@ -690,6 +690,8 @@ class ReleaseEpicSummary(BaseModel):
     jira_tasks_count: int = 0
     open_questions_count: int = 0
     blockers_count: int = 0
+    risk_count: int = 0
+    active_test_stage: str | None = None
     freshness: dict[str, Any] = Field(default_factory=dict)
 
 
