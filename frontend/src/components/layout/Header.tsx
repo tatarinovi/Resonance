@@ -29,6 +29,7 @@ const routeLabels: Record<string, string> = {
   "/questions": "Вопросы",
   "/epics": "Эпики",
   "/releases": "Релизы",
+  "/leaderboard": "Рейтинг QA",
   "/activity": "Активность",
   "/statistics": "Статистика",
   "/users": "Пользователи",

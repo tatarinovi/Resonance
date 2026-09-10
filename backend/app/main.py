@@ -23,6 +23,7 @@ from .routers import (
     files,
     integrations,
     kanban,
+    leaderboard,
     notifications,
     reference,
     releases,
@@ -73,6 +74,19 @@ app.add_middleware(CorrelationMiddleware)
 async def on_startup() -> None:
     bootstrap_database(run_migrations=settings.run_migrations_on_startup)
     bus.attach_loop(asyncio.get_running_loop())
+    from .leaderboard_sync import leaderboard_poll_loop
+    app.state.leaderboard_task = asyncio.create_task(leaderboard_poll_loop())
+
+
+@app.on_event("shutdown")
+async def stop_leaderboard() -> None:
+    task = getattr(app.state, "leaderboard_task", None)
+    if task:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
 
 
 @app.get("/health")
@@ -112,3 +126,4 @@ app.include_router(reference.router, prefix=settings.api_prefix)
 app.include_router(releases.router, prefix=settings.api_prefix)
 app.include_router(aggregates.router, prefix=settings.api_prefix)
 app.include_router(stream.router, prefix=settings.api_prefix)
+app.include_router(leaderboard.router, prefix=settings.api_prefix)

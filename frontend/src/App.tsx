@@ -15,6 +15,7 @@ import NotFound from "@/pages/not-found";
 import RegisterPage from "@/pages/RegisterPage";
 
 const ActivityPage = lazy(() => import("@/pages/ActivityPage"));
+const LeaderboardPage = lazy(() => import("@/pages/LeaderboardPage"));
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const EpicDetailPage = lazy(() => import("@/pages/EpicDetailPage"));
 const EpicsPage = lazy(() => import("@/pages/EpicsPage"));
@@ -85,6 +86,7 @@ export default function App() {
               <Route path="/releases" element={<ShellRoute><ReleasesPage /></ShellRoute>} />
               <Route path="/releases/:id" element={<ShellRoute><ReleaseDetailPage /></ShellRoute>} />
               <Route path="/activity" element={<ShellRoute><ActivityPage /></ShellRoute>} />
+              <Route path="/leaderboard" element={<ShellRoute><LeaderboardPage /></ShellRoute>} />
               <Route path="/statistics" element={<ShellRoute><StatisticsPage /></ShellRoute>} />
               <Route path="/users" element={<ShellRoute><RequireAdmin><UsersPage /></RequireAdmin></ShellRoute>} />
               <Route path="/users/:id" element={<ShellRoute><UserProfilePage /></ShellRoute>} />

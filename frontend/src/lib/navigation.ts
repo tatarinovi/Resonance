@@ -12,6 +12,7 @@ import {
   Rocket,
   Settings,
   Users,
+  Trophy,
 } from "lucide-react";
 
 import { QUESTION_SAVED_VIEWS } from "@/lib/questionViews";
@@ -24,6 +25,7 @@ export interface NavigationItem {
   icon: ComponentType<LucideProps>;
   badgeKey?: "inboxUnread";
   adminOnly?: boolean;
+  leaderboardOnly?: boolean;
 }
 
 export interface NavigationSection {
@@ -55,6 +57,7 @@ export const NAVIGATION_SECTIONS: NavigationSection[] = [
       { href: "/epics", icon: Layers, label: "Эпики" },
       { href: "/releases", icon: Rocket, label: "Релизы" },
       { href: "/projects", icon: FolderKanban, label: "Проекты" },
+      { href: "/leaderboard", icon: Trophy, label: "Рейтинг QA", leaderboardOnly: true },
     ],
   },
   {

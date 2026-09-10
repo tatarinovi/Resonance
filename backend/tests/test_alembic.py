@@ -70,3 +70,26 @@ def test_release_insights_upgrade_preserves_legacy_cache():
             assert 'status_category' in {c['name'] for c in inspect(conn).get_columns('epic_jira_issues')}
             migration.downgrade()
         assert conn.execute(text('SELECT legacy FROM epic_test_runs')).scalar() == 'preserved'
+
+
+def test_leaderboard_migration_preserves_users_and_has_unique_contributions():
+    import importlib.util
+    from alembic.migration import MigrationContext
+    from alembic.operations import Operations
+    from sqlalchemy import create_engine, text, inspect
+    path = BACKEND_ROOT / 'migrations/versions/0021_qa_leaderboard.py'
+    spec = importlib.util.spec_from_file_location('leaderboard_migration',path)
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    engine = create_engine('sqlite://')
+    with engine.begin() as conn:
+        conn.execute(text('CREATE TABLE users (id INTEGER PRIMARY KEY, username TEXT)'))
+        conn.execute(text("INSERT INTO users VALUES (1,'preserved')"))
+        with Operations.context(MigrationContext.configure(conn)):
+            migration.upgrade()
+            constraints = inspect(conn).get_unique_constraints('leaderboard_contributions')
+            assert any(c['name'] == 'uq_leaderboard_contribution' for c in constraints)
+            assert 'leaderboard_seasons' in inspect(conn).get_table_names()
+            migration.downgrade()
+        assert conn.execute(text('SELECT username FROM users')).scalar() == 'preserved'
+        assert not any(n.startswith('leaderboard_') for n in inspect(conn).get_table_names())

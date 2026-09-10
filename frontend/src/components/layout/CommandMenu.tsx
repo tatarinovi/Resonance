@@ -17,6 +17,7 @@ import { questions } from "@/data/questions";
 import type { CommandAction } from "@/lib/commandActions";
 import { COMMAND_NAVIGATION_ITEMS } from "@/lib/navigation";
 import { useLocation } from "@/lib/router";
+import { canViewLeaderboard } from "@/lib/leaderboard/queries";
 
 interface CommandMenuProps {
   open: boolean;
@@ -44,6 +45,7 @@ export function CommandMenu({ open, onOpenChange, onCreateQuestion, onOpenFeedba
 
   const navigationActions: CommandAction[] = COMMAND_NAVIGATION_ITEMS
     .filter((item) => !item.adminOnly || isAdmin)
+    .filter((item) => !item.leaderboardOnly || canViewLeaderboard(me))
     .map((item) => ({
       id: `nav:${item.href}`,
       label: item.label,

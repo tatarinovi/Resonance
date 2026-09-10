@@ -48,6 +48,7 @@ import {
 } from "@/lib/navigation";
 import { Link } from "@/lib/router";
 import { cn } from "@/lib/utils";
+import { canViewLeaderboard } from "@/lib/leaderboard/queries";
 
 const COMPACT_BREAKPOINT_PX = 148;
 
@@ -301,6 +302,7 @@ export function Sidebar({ onNavigate, sidebarWidth }: SidebarProps) {
         {VISIBLE_NAVIGATION_SECTIONS.map((section) => {
           const items = section.items
             .filter((item) => !item.adminOnly || isAdmin)
+            .filter((item) => !item.leaderboardOnly || canViewLeaderboard(me))
             .filter((item) => section.id !== "focus" || shouldShowFocusNavigationItem(item.href, focusCounts));
           if (!items.length) return null;
           return (

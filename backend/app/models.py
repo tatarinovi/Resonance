@@ -887,3 +887,71 @@ class TelegramLinkingToken(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class LeaderboardSeason(Base):
+    __tablename__ = "leaderboard_seasons"
+    key: Mapped[str] = mapped_column(String(7), primary_key=True)
+    rules: Mapped[dict] = mapped_column(JSON, nullable=False)
+    roster: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class LeaderboardContribution(Base):
+    __tablename__ = "leaderboard_contributions"
+    __table_args__ = (
+        UniqueConstraint("season", "source", "source_key", "participant_id", "event_type", name="uq_leaderboard_contribution"),
+        Index("ix_leaderboard_activity", "season", "participant_id", "source_at"),
+    )
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    season: Mapped[str] = mapped_column(ForeignKey("leaderboard_seasons.key"), nullable=False)
+    # Historical identity deliberately survives deletion of the live user account.
+    participant_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    event_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    source_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    points: Mapped[int] = mapped_column(Integer, nullable=False)
+    eligible: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    explanation: Mapped[str] = mapped_column(Text, nullable=False)
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class LeaderboardBug(Base):
+    __tablename__ = "leaderboard_bugs"
+    __table_args__ = (UniqueConstraint("season", "source_key", name="uq_leaderboard_bug"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    season: Mapped[str] = mapped_column(ForeignKey("leaderboard_seasons.key"), nullable=False)
+    source_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    issue_key: Mapped[str] = mapped_column(String(128), nullable=False)
+    participant_id: Mapped[int | None] = mapped_column(Integer)
+    source_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    environment: Mapped[str | None] = mapped_column(String(10))
+    status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    problem: Mapped[str | None] = mapped_column(String(500))
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class LeaderboardIdentity(Base):
+    __tablename__ = "leaderboard_identities"
+    __table_args__ = (UniqueConstraint("source", "external_id", name="uq_leaderboard_identity"),)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    external_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+
+
+class LeaderboardAudit(Base):
+    __tablename__ = "leaderboard_audit"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    season: Mapped[str | None] = mapped_column(String(7), index=True)
+    admin_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    details: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

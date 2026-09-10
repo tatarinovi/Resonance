@@ -34,7 +34,7 @@ backend/
     realtime.py              process-local SSE event bus
     kanban_client.py         external Kanban HTTP client and normalization
     storage.py               S3/MinIO access
-  migrations/versions/       linear Alembic history; current head is 0020
+  migrations/versions/       linear Alembic history; current head is 0021
   tests/                     pytest API/unit coverage
   docs/                      notification and Kanban implementation notes
 frontend/
@@ -272,7 +272,7 @@ Uploads reject HTML/XHTML and SVG by MIME type and extension. New S3 objects use
 
 ### Database changes
 
-Never use `Base.metadata.create_all()` as a schema-change mechanism. Add a new linear Alembic revision after `0020_release_insights`, update ORM and Pydantic/frontend DTOs together, and run `tests/test_alembic.py`. Migrations must work for both empty databases and upgrades from the previous head. `bootstrap.py` contains deliberate compatibility logic for databases that predate Alembic; do not remove it casually.
+Never use `Base.metadata.create_all()` as a schema-change mechanism. Add a new linear Alembic revision after `0021_qa_leaderboard`, update ORM and Pydantic/frontend DTOs together, and run `tests/test_alembic.py`. Migrations must work for both empty databases and upgrades from the previous head. `bootstrap.py` contains deliberate compatibility logic for databases that predate Alembic; do not remove it casually.
 
 ## Frontend design
 
@@ -379,3 +379,14 @@ Before handoff:
 - Ready/released transitions re-evaluate risks on the server. Actual risks require `accept_risks=true` and the current assessment `risk_fingerprint`; changed risks return 409. Accepted risk composition is stored in audit history. Role, transition, and historical-membership rules remain server-enforced.
 - Release components live in `frontend/src/components/releases/`; tabs, filters, sort, and pagination use URL search parameters. Release breadcrumbs use the backend global key, never the numeric route ID. Desktop light/dark use existing theme tokens.
 - Focused regression coverage: `test_release_insights.py`, `test_epic_testops_pagination.py`, `test_alembic.py`, and frontend `releaseInsights.test.tsx`.
+
+
+## QA leaderboard (0021)
+
+- `/leaderboard` and `/api/leaderboard` form a separate bounded domain. Use `leaderboard_rules.py`, `leaderboard_service.py`, `leaderboard_sources.py`, `leaderboard_sync.py` and `routers/leaderboard.py`; see `backend/docs/qa_leaderboard.md` for complete contracts and source limitations.
+- Participants are exactly employee/qa/ds. Admins may view/moderate but never rank. Leaderboard names/totals deliberately bypass project scoping; private contribution details are self/admin only. Do not extend this exception to project APIs.
+- Monthly Moscow seasons retain rules and a roster snapshot. Ordinary sync only changes the current month. Historical corrections are separate audited contributions; initial historical import requires explicit acknowledgement of current-source-state limitations and never overwrites an existing season.
+- The API process polls every minute, syncs every ten minutes in a worker thread, and persists source diagnostics. PostgreSQL advisory locks protect mutations and source refresh. Backfill requests are durable and resumed by the poll loop; retain the existing single API worker deployment.
+- Actual matching means QA worklog hours on the Epic and children versus Resonance `Epic.qa_estimate_hours`; Kanban `is_actual` means a current estimate, never tracked time. Lead estimate attribution uses Resonance QA coordinator/manager identities; missing/ambiguous estimates are unscored.
+- Credentials remain global in integration_connections. Exact external identity mappings and source scopes are admin-audited. Never infer Jira reporter/TestOps creator/executor from display-name similarity or ownership.
+- Regression tests: `test_leaderboard.py`, `test_alembic.py`, frontend `leaderboard.test.tsx` and `navigation.test.ts`.
