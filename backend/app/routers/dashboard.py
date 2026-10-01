@@ -4,7 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status as http_status
-from sqlalchemy import String, asc, case, cast, desc, func, or_, select
+from sqlalchemy import String, asc, case, cast, desc, false, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -17,6 +17,7 @@ from ..expert_utils import (
     EXPERT_DIRECTIONS,
     assignee_candidate_for_cross_direction_pool,
     domain_expert_conditions,
+    expert_direction_matches_target,
     suggested_target_direction_for_assignee,
     user_is_ticket_expert,
     user_may_claim_forwarded_ticket,
@@ -128,6 +129,11 @@ def _latest_ticket_message_body(ticket: Ticket, author_id: int | None = None) ->
     return ""
 
 
+def _ticket_target_direction(ticket: Ticket) -> str | None:
+    raw = (ticket.data_json or {}).get("target_direction")
+    return raw if isinstance(raw, str) else None
+
+
 def _is_ticket_transition_allowed(
     *,
     user: User,
@@ -136,6 +142,7 @@ def _is_ticket_transition_allowed(
     old_status: TicketStatus,
     new_status: TicketStatus,
     assignee_id: int | None = None,
+    target_direction: str | None = None,
 ) -> bool:
     if user.role == UserRole.ADMIN:
         return True
@@ -144,7 +151,9 @@ def _is_ticket_transition_allowed(
 
     is_author = (author_id is not None and user.id == author_id) or user.username == author_name
     is_coordinator = is_coordinator_role(user)
-    can_answer_as_expert = user_is_ticket_expert(user)
+    # Non-assignee experts answer only their own specialty. The current assignee
+    # keeps the existing short-circuit below, including when directions differ.
+    can_answer_as_expert = expert_direction_matches_target(user, target_direction)
 
     pair = (old_status, new_status)
 
@@ -187,6 +196,7 @@ def _allowed_ticket_target_statuses(
     author_id: int | None = None,
     old_status: TicketStatus,
     assignee_id: int | None,
+    target_direction: str | None = None,
 ) -> list[TicketStatus]:
     result: list[TicketStatus] = []
     for cand in TicketStatus:
@@ -199,6 +209,7 @@ def _allowed_ticket_target_statuses(
             old_status=old_status,
             new_status=cand,
             assignee_id=assignee_id,
+            target_direction=target_direction,
         ):
             result.append(cand)
     return result
@@ -212,6 +223,7 @@ def _ticket_read_for_viewer(db: Session, ticket: Ticket, viewer: User) -> Ticket
         author_id=ticket.author_id,
         old_status=ticket.status,
         assignee_id=ticket.assignee_id,
+        target_direction=_ticket_target_direction(ticket),
     )
     subscribed = is_user_subscribed(db, ticket.id, viewer.id)
     can_claim = user_may_claim_forwarded_ticket(ticket, viewer)
@@ -291,13 +303,16 @@ def _apply_ticket_visibility(stmt, user: User, allowed_project_ids: list[int]):
                 Ticket.data_json["validation_team"].as_string().in_(user_direction_aliases),
             )
         )
-    elif user.role == UserRole.EXPERT:
-        stmt = stmt.where(Ticket.status.in_([TicketStatus.FORWARDED, TicketStatus.ANSWERED, TicketStatus.CLOSED]))
-    elif user.role == UserRole.EMPLOYEE and user_direction in EXPERT_DIRECTIONS:
-        stmt = stmt.where(
-            Ticket.status.in_([TicketStatus.FORWARDED, TicketStatus.ANSWERED, TicketStatus.CLOSED]),
-            Ticket.data_json["target_direction"].as_string().in_(user_direction_aliases),
-        )
+    elif user_is_ticket_expert(user):
+        # Role expert and analytics/design employees share one audience filter.
+        # A missing or non-expert specialty matches nothing.
+        if user_direction not in EXPERT_DIRECTIONS:
+            stmt = stmt.where(false())
+        else:
+            stmt = stmt.where(
+                Ticket.status.in_([TicketStatus.FORWARDED, TicketStatus.ANSWERED, TicketStatus.CLOSED]),
+                Ticket.data_json["target_direction"].as_string().in_(user_direction_aliases),
+            )
     elif user.role == UserRole.EMPLOYEE and user_direction in ("qa", "front", "back"):
         d = user_direction
         stmt = stmt.where(
@@ -714,7 +729,12 @@ def get_ticket_allowed_status_transitions(
 
     author_name = _ticket_author_label(ticket)
     return _allowed_ticket_target_statuses(
-        user=user, author_name=author_name, author_id=ticket.author_id, old_status=ticket.status, assignee_id=ticket.assignee_id
+        user=user,
+        author_name=author_name,
+        author_id=ticket.author_id,
+        old_status=ticket.status,
+        assignee_id=ticket.assignee_id,
+        target_direction=_ticket_target_direction(ticket),
     )
 
 
@@ -935,6 +955,7 @@ async def update_ticket(
             old_status=old_status,
             new_status=new_status,
             assignee_id=ticket.assignee_id,
+            target_direction=_ticket_target_direction(ticket),
         ):
             raise HTTPException(
                 status_code=403,
