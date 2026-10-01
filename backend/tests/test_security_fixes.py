@@ -99,7 +99,7 @@ def _make_epic(db, project, title="Epic 1"):
     return epic
 
 
-def _make_ticket(db, project, author, *, status=TicketStatus.PENDING_APPROVAL, epic=None):
+def _make_ticket(db, project, author, *, status=TicketStatus.PENDING_APPROVAL, epic=None, data_json=None):
     ticket = Ticket(
         project_id=project.id,
         status=status,
@@ -109,7 +109,7 @@ def _make_ticket(db, project, author, *, status=TicketStatus.PENDING_APPROVAL, e
         priority="medium",
         sla_hours=24,
         due_at=datetime.utcnow() + timedelta(hours=24),
-        data_json={},
+        data_json=data_json if data_json is not None else {},
     )
     if epic:
         ticket.epic_id = epic.id
@@ -274,7 +274,13 @@ class TestTicketVisibilityInMessagesAndAttachments:
                 expert.projects = [project]
                 author = _make_user(db, "author")
                 author.projects = [project]
-                ticket = _make_ticket(db, project, author, status=TicketStatus.PENDING_APPROVAL)
+                ticket = _make_ticket(
+                    db,
+                    project,
+                    author,
+                    status=TicketStatus.PENDING_APPROVAL,
+                    data_json={"target_direction": "analytics"},
+                )
                 db.commit()
                 ticket_id = ticket.id
 
@@ -293,7 +299,13 @@ class TestTicketVisibilityInMessagesAndAttachments:
                 expert.projects = [project]
                 author = _make_user(db, "author")
                 author.projects = [project]
-                ticket = _make_ticket(db, project, author, status=TicketStatus.FORWARDED)
+                ticket = _make_ticket(
+                    db,
+                    project,
+                    author,
+                    status=TicketStatus.FORWARDED,
+                    data_json={"target_direction": "analytics"},
+                )
                 db.commit()
                 ticket_id = ticket.id
 

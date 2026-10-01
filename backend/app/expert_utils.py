@@ -6,7 +6,7 @@ from sqlalchemy import and_, or_
 
 from .models import Ticket, TicketStatus, User, UserRole
 from .access_policy import is_coordinator_role
-from .directions import normalize_direction
+from .directions import direction_alias_values, normalize_direction
 
 # Совпадает с target_direction в тикетах и конфигом комнат (см. notification_service).
 EXPERT_DIRECTIONS = frozenset({"analytics", "design"})
@@ -19,6 +19,24 @@ def user_is_ticket_expert(user: User) -> bool:
     if user.role == UserRole.EMPLOYEE and normalize_direction(user.direction) in EXPERT_DIRECTIONS:
         return True
     return False
+
+
+def expert_direction_matches_target(user: User, target_direction: str | None) -> bool:
+    """Специальность эксперта совпадает с аудиторией вопроса.
+
+    Пустое или неэкспертное направление пользователя — отказ (fail closed).
+    Вопрос без аудитории analytics/design тоже не совпадает.
+    """
+    if not user_is_ticket_expert(user):
+        return False
+    user_direction = normalize_direction(user.direction)
+    if user_direction not in EXPERT_DIRECTIONS:
+        return False
+    raw = target_direction if isinstance(target_direction, str) else None
+    audience = normalize_direction(raw)
+    if audience not in EXPERT_DIRECTIONS:
+        return False
+    return audience in direction_alias_values(user_direction)
 
 
 def domain_expert_conditions():
