@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from unittest.mock import MagicMock
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import BigInteger, create_engine, event, select, text
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -25,6 +25,36 @@ from app.models import (
 from app.security import create_access_token, hash_password
 
 
+_sqlite_bigint_counters: dict[str, int] = {}
+_sqlite_bigint_listener_installed = False
+
+
+def _install_sqlite_bigint_pk_listener() -> None:
+    """SQLite does not autoincrement BIGINT primary keys, so ticket creation cannot commit ticket_events."""
+    global _sqlite_bigint_listener_installed
+    if _sqlite_bigint_listener_installed:
+        return
+
+    @event.listens_for(Base, "before_insert", propagate=True)
+    def _assign_sqlite_bigint_pk(mapper, connection, target) -> None:
+        if connection.dialect.name != "sqlite":
+            return
+        for col in mapper.primary_key:
+            attr = mapper.get_property_by_column(col).key
+            if getattr(target, attr) is not None or not isinstance(col.type, BigInteger):
+                continue
+            table = target.__tablename__
+            if table not in _sqlite_bigint_counters:
+                current = connection.execute(
+                    text(f'SELECT COALESCE(MAX("{col.name}"), 0) FROM "{table}"')
+                ).scalar_one()
+                _sqlite_bigint_counters[table] = int(current or 0)
+            _sqlite_bigint_counters[table] += 1
+            setattr(target, attr, _sqlite_bigint_counters[table])
+
+    _sqlite_bigint_listener_installed = True
+
+
 def _setup():
     engine = create_engine(
         "sqlite+pysqlite://",
@@ -32,6 +62,7 @@ def _setup():
         poolclass=StaticPool,
         future=True,
     )
+    _install_sqlite_bigint_pk_listener()
     SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
     Base.metadata.create_all(bind=engine)
 
@@ -144,6 +175,7 @@ class TestTicketCreation:
             app.dependency_overrides.clear()
 
     def test_create_ticket_without_epic(self):
+        """Inter-department questions do not need a placeholder epic."""
         client, SessionLocal = _setup()
         try:
             with SessionLocal() as db:
@@ -155,9 +187,128 @@ class TestTicketCreation:
 
             resp = client.post("/api/tickets", json={
                 "project_id": project_id,
+                "epic_id": None,
                 "title": "No epic",
+                "data_json": {"target_direction": "analytics"},
+            }, headers=_auth("alice"))
+            assert resp.status_code == 201, resp.text
+            body = resp.json()
+            assert body["epic_id"] is None
+            assert body["project_id"] == project_id
+            assert body["title"] == "No epic"
+            assert "epic_name" not in body["data_json"]
+
+            with SessionLocal() as db:
+                stored = db.scalar(select(Ticket).where(Ticket.title == "No epic"))
+                assert stored is not None
+                assert stored.epic_id is None
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_create_ticket_with_epic_in_project(self):
+        client, SessionLocal = _setup()
+        try:
+            with SessionLocal() as db:
+                project = _make_project(db, "P1")
+                user = _make_user(db, "alice")
+                user.projects = [project]
+                epic = _make_epic(db, project, title="Shared epic")
+                db.commit()
+                project_id = project.id
+                epic_id = epic.id
+
+            resp = client.post("/api/tickets", json={
+                "project_id": project_id,
+                "epic_id": epic_id,
+                "title": "With epic",
+                "data_json": {"target_direction": "analytics"},
+            }, headers=_auth("alice"))
+            assert resp.status_code == 201, resp.text
+            body = resp.json()
+            assert body["epic_id"] == epic_id
+            assert body["data_json"]["epic_name"] == "Shared epic"
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_create_ticket_rejects_epic_from_other_project(self):
+        client, SessionLocal = _setup()
+        try:
+            with SessionLocal() as db:
+                project_a = _make_project(db, "A")
+                project_b = _make_project(db, "B")
+                user = _make_user(db, "alice")
+                user.projects = [project_a, project_b]
+                epic = _make_epic(db, project_b, title="Other")
+                db.commit()
+                project_a_id = project_a.id
+                epic_id = epic.id
+
+            resp = client.post("/api/tickets", json={
+                "project_id": project_a_id,
+                "epic_id": epic_id,
+                "title": "Cross project",
+                "data_json": {"target_direction": "analytics"},
             }, headers=_auth("alice"))
             assert resp.status_code == 422
+            assert "project" in resp.json()["detail"].lower()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_create_ticket_rejects_unknown_epic(self):
+        client, SessionLocal = _setup()
+        try:
+            with SessionLocal() as db:
+                project = _make_project(db, "P1")
+                user = _make_user(db, "alice")
+                user.projects = [project]
+                db.commit()
+                project_id = project.id
+
+            resp = client.post("/api/tickets", json={
+                "project_id": project_id,
+                "epic_id": 99999,
+                "title": "Missing epic",
+                "data_json": {"target_direction": "analytics"},
+            }, headers=_auth("alice"))
+            assert resp.status_code == 422
+            assert "not found" in resp.json()["detail"].lower()
+        finally:
+            app.dependency_overrides.clear()
+
+    def test_coordinator_cannot_attach_epic_from_other_project(self):
+        client, SessionLocal = _setup()
+        try:
+            with SessionLocal() as db:
+                project_a = _make_project(db, "A")
+                project_b = _make_project(db, "B")
+                coordinator = _make_user(db, "coord", role=UserRole.COORDINATOR, direction="coordinator")
+                coordinator.projects = [project_a, project_b]
+                epic_b = _make_epic(db, project_b, title="Foreign")
+                ticket = Ticket(
+                    project_id=project_a.id,
+                    epic_id=None,
+                    status=TicketStatus.PENDING_APPROVAL,
+                    origin_event_id="t-no-epic",
+                    author_id=coordinator.id,
+                    priority="medium",
+                    data_json={},
+                )
+                db.add(ticket)
+                db.commit()
+                ticket_id = ticket.id
+                epic_b_id = epic_b.id
+
+            resp = client.put(
+                f"/api/tickets/{ticket_id}",
+                json={"epic_id": epic_b_id},
+                headers=_auth("coord"),
+            )
+            assert resp.status_code == 422
+            assert "project" in resp.json()["detail"].lower()
+            with SessionLocal() as db:
+                stored = db.get(Ticket, ticket_id)
+                assert stored is not None
+                assert stored.epic_id is None
         finally:
             app.dependency_overrides.clear()
 
