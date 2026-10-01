@@ -250,10 +250,6 @@ export function CreateQuestionDialog({ open, onOpenChange, defaultProjectRefId }
       toast.error("Выберите, кому адресован вопрос");
       return;
     }
-    if (form.epicId == null || form.epicId < 1) {
-      toast.error("Выберите эпик");
-      return;
-    }
     const projectIdNumeric = refIdToNumeric(form.projectId);
     if (!projectIdNumeric) {
       toast.error("Некорректный проект");
@@ -265,7 +261,7 @@ export function CreateQuestionDialog({ open, onOpenChange, defaultProjectRefId }
         title: form.title.trim(),
         description: form.description.trim() || undefined,
         priority: PRIORITY_FROM_REF[form.priority],
-        epic_id: form.epicId,
+        ...(form.epicId != null && form.epicId > 0 ? { epic_id: form.epicId } : {}),
         data_json: { target_direction: form.audience },
       });
       clearQuestionDraft(userId);
@@ -284,7 +280,7 @@ export function CreateQuestionDialog({ open, onOpenChange, defaultProjectRefId }
       ? "Вопрос сразу уходит лиду выбранного направления (QA, Front или Back) без проверки координатором."
       : audienceMode === "admin"
         ? "После выбора доменных направлений (аналитика, дизайн) вопрос сначала на согласовании у координатора; инженерные направления — сразу к лиду."
-        : "После согласования координатором вопрос будет назначен лиду эпика (аналитик или дизайнер) в соответствии с выбором.";
+        : "После согласования координатором вопрос назначается лиду эпика, если эпик выбран. Без эпика он уходит эксперту направления.";
 
   return (
     <>
@@ -299,7 +295,7 @@ export function CreateQuestionDialog({ open, onOpenChange, defaultProjectRefId }
           <DialogHeader>
             <DialogTitle>Задать вопрос</DialogTitle>
             <DialogDescription className="sr-only">
-              Форма создания вопроса: заголовок, описание, адресат, проект, эпик и приоритет.
+              Форма создания вопроса: заголовок, описание, адресат, проект и приоритет. Эпик можно не указывать.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-4 mt-2">
@@ -404,7 +400,7 @@ export function CreateQuestionDialog({ open, onOpenChange, defaultProjectRefId }
               </div>
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground block mb-1.5">Эпик *</label>
+              <label className="text-xs font-medium text-muted-foreground block mb-1.5">Эпик</label>
               <Popover open={epicComboOpen} onOpenChange={setEpicComboOpen}>
                 <PopoverTrigger asChild>
                   <Button
@@ -418,7 +414,7 @@ export function CreateQuestionDialog({ open, onOpenChange, defaultProjectRefId }
                   >
                     <span className="truncate">
                       {form.projectId
-                        ? selectedEpicTitle || "Выберите эпик…"
+                        ? selectedEpicTitle || "Без эпика"
                         : "Сначала выберите проект"}
                     </span>
                     <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -432,6 +428,21 @@ export function CreateQuestionDialog({ open, onOpenChange, defaultProjectRefId }
                         {form.projectId ? "Нет подходящих эпиков" : "Выберите проект"}
                       </CommandEmpty>
                       <CommandGroup>
+                        <CommandItem
+                          value="без эпика"
+                          onSelect={() => {
+                            setForm((f) => ({ ...f, epicId: null }));
+                            setEpicComboOpen(false);
+                          }}
+                        >
+                          <Check
+                            className={cn(
+                              "mr-2 h-4 w-4",
+                              form.epicId == null ? "opacity-100" : "opacity-0",
+                            )}
+                          />
+                          <span className="truncate">Без эпика</span>
+                        </CommandItem>
                         {epicOptions.map((epic) => (
                           <CommandItem
                             key={epic.id}
@@ -456,7 +467,7 @@ export function CreateQuestionDialog({ open, onOpenChange, defaultProjectRefId }
                 </PopoverContent>
               </Popover>
               <p className="text-[10px] text-muted-foreground mt-1">
-                Эпик обязателен: после согласования вопрос пойдёт к лиду эпика (для аналитики и дизайна).
+                Необязательно. Если указать эпик этого проекта, вопрос для аналитики и дизайна уйдёт его лиду.
               </p>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-2 pt-2">

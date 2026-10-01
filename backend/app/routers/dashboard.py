@@ -1053,8 +1053,9 @@ async def update_ticket(
     if payload.epic_id is not None and payload.epic_id != ticket.epic_id:
         if user.role != UserRole.ADMIN and not is_coordinator_role(user):
             raise HTTPException(status_code=403, detail="Only coordinator or admin can change epic")
-        field_changes.append(("epic_id", ticket.epic_id, payload.epic_id))
-        ticket.epic_id = payload.epic_id
+        epic = _require_project_epic(db, payload.epic_id, ticket.project_id)
+        field_changes.append(("epic_id", ticket.epic_id, epic.id))
+        ticket.epic_id = epic.id
 
     for field_name, old_value, new_value in field_changes:
         kind = TicketEventKind.PRIORITY_CHANGED.value if field_name == "priority" else (
@@ -1114,6 +1115,23 @@ def delete_ticket(
     db.commit()
 
 
+def _require_project_epic(db: Session, epic_id: int, project_id: int) -> Epic:
+    if epic_id < 1:
+        raise HTTPException(status_code=422, detail="epic_id is invalid")
+    epic = db.get(Epic, epic_id)
+    if epic is None:
+        raise HTTPException(status_code=422, detail="Epic not found")
+    assert_epic_belongs_to_project(epic, project_id)
+    return epic
+
+
+def _project_epic(db: Session, epic_id: int | None, project_id: int) -> Epic | None:
+    """Return the epic when one is supplied. A missing epic is valid for inter-department questions."""
+    if epic_id is None:
+        return None
+    return _require_project_epic(db, epic_id, project_id)
+
+
 @router.post("/tickets", response_model=TicketRead, status_code=http_status.HTTP_201_CREATED)
 async def create_ticket(
     payload: TicketCreate,
@@ -1139,12 +1157,7 @@ async def create_ticket(
     title = (payload.title or "").strip() or "(без заголовка)"
     description = payload.description or ""
 
-    if not payload.epic_id or payload.epic_id < 1:
-        raise HTTPException(status_code=422, detail="epic_id is required")
-    epic = db.get(Epic, payload.epic_id)
-    if epic is None:
-        raise HTTPException(status_code=422, detail="Epic not found")
-    assert_epic_belongs_to_project(epic, payload.project_id)
+    epic = _project_epic(db, payload.epic_id, payload.project_id)
 
     legacy = payload.data_json.copy() if payload.data_json else {}
     td_raw = legacy.get("target_direction")
@@ -1161,7 +1174,8 @@ async def create_ticket(
         legacy.setdefault("source_direction", source_direction)
     legacy["target_direction"] = audience
     legacy["validation_team"] = validation_team_for_new_question(audience=audience, user=user)
-    legacy["epic_name"] = epic.title
+    if epic is not None:
+        legacy["epic_name"] = epic.title
     legacy["is_expert_ticket"] = is_expert_track_ticket(initial_status=initial_status, audience=audience)
     legacy["history"] = [
         {
@@ -1173,7 +1187,7 @@ async def create_ticket(
 
     ticket = Ticket(
         project_id=payload.project_id,
-        epic_id=payload.epic_id,
+        epic_id=epic.id if epic is not None else None,
         status=initial_status,
         origin_event_id=f"web_manual_{uuid.uuid4()}",
         title=title[:500],
